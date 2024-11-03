@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using ClosedXML.Excel;
+﻿using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -57,6 +56,8 @@ app.Run();
 
 public class DataCheckApp : ConsoleAppBase
 {
+    bool isAllPass = true;
+
     readonly ILogger<DataCheckApp> logger;
     readonly IOptions<MyConfig> config;
 
@@ -71,12 +72,14 @@ public class DataCheckApp : ConsoleAppBase
 //    [Command("")]
     public void Check(string excelpath, string prefix)
     {
+//== start
+        logger.ZLogInformation($"==== tool {getMyFileVersion()} ====");
+        
         if (!File.Exists(excelpath))
         {
             logger.ZLogError($"target excel file is missing.");
             return;
         }
-        logger.ZLogInformation($"[command] arg excel:{excelpath}, prefix:{prefix}");
 
         FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
         using XLWorkbook xlWorkbook = new XLWorkbook(fs);
@@ -101,69 +104,76 @@ public class DataCheckApp : ConsoleAppBase
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
 
-        foreach (var sheet in sheets)
-        {
-            int lastUsedRowNumber = sheet.LastRowUsed() == null ? 0 : sheet.LastRowUsed().RowNumber();
-            int lastUsedColumNumber = sheet.LastColumnUsed() == null ? 0 : sheet.LastColumnUsed().ColumnNumber();
-            logger.ZLogInformation($"name:{sheet.Name}, lastUsedRow:{lastUsedRowNumber}, lastUsedColum:{lastUsedColumNumber}");
-//            logger.ZLogInformation($"name:{sheet.Name}, deviceToHostNameColumn:{deviceToHostNameColumn}, deviceToPortNameColumn:{deviceToPortNameColumn}");
+        logger.ZLogInformation($"== パラメーター ==");
+        logger.ZLogInformation($"対象:{excelpath}");
+        logger.ZLogInformation($"接頭語:{prefix}, ホスト名の長さ:{hostNameLength}, ローゼット名の長さ:{rosetteHostNameLength}");
 
-            for (int r = 1; r < lastUsedRowNumber + 1; r++)
+        foreach (IXLWorksheet? sheet in sheets)
+        {
+            if (sheet != null)
             {
-                IXLCell cellConnect = sheet.Cell(r, deviceFromConnectColumn);
-                IXLCell cellCableID = sheet.Cell(r, deviceFromCableIdColumn);
-                if (cellConnect.IsEmpty() == true)
+                int lastUsedRowNumber = sheet.LastRowUsed() == null ? 0 : sheet.LastRowUsed().RowNumber();
+                int lastUsedColumNumber = sheet.LastColumnUsed() == null ? 0 : sheet.LastColumnUsed().ColumnNumber();
+
+                logger.ZLogInformation($"シート名:{sheet.Name}, 最後の行:{lastUsedRowNumber}, 最後の列:{lastUsedColumNumber}");
+
+                for (int r = 1; r < lastUsedRowNumber + 1; r++)
                 {
-                    // nothing
-                }
-                else
-                {
-                    if (cellConnect.Value.GetText() == wordConnect || cellConnect.Value.GetText() == wordDisconnect)
+                    IXLCell cellConnect = sheet.Cell(r, deviceFromConnectColumn);
+                    IXLCell cellCableID = sheet.Cell(r, deviceFromCableIdColumn);
+                    if (cellConnect.IsEmpty() == true)
                     {
-                        MyDevicePort tmpDevicePort = new MyDevicePort();
-                        tmpDevicePort.fromConnect = cellConnect.Value.GetText();
-                        int id = -1;
-                        switch (cellCableID.DataType)
+                        // nothing
+                    }
+                    else
+                    {
+                        if (cellConnect.Value.GetText() == wordConnect || cellConnect.Value.GetText() == wordDisconnect)
                         {
-                            case XLDataType.Number:
-                                id = cellCableID.GetValue<int>();
-                                break;
-                            case XLDataType.Text:
-                                try
-                                {
-                                    id = int.Parse(cellCableID.GetValue<string>());
-                                }
-                                catch (System.FormatException)
-                                {
-                                    logger.ZLogError($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                            MyDevicePort tmpDevicePort = new MyDevicePort();
+                            tmpDevicePort.fromConnect = cellConnect.Value.GetText();
+                            int id = -1;
+                            switch (cellCableID.DataType)
+                            {
+                                case XLDataType.Number:
+                                    id = cellCableID.GetValue<int>();
+                                    break;
+                                case XLDataType.Text:
+                                    try
+                                    {
+                                        id = int.Parse(cellCableID.GetValue<string>());
+                                    }
+                                    catch (System.FormatException)
+                                    {
+                                        logger.ZLogError($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                                        continue;
+                                    }
+                                    catch (System.Exception)
+                                    {
+                                        throw;
+                                    }
+                                    break;
+                                default:
+                                    logger.ZLogError($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
                                     continue;
-                                }
-                                catch (System.Exception)
-                                {
-                                    throw;
-                                }
-                                break;
-                            default:
-                                logger.ZLogError($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
-                                continue;
+                            }
+                            tmpDevicePort.fromCableID = id;
+                            tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
+                            tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
+                            tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
+                            tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
+                            tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
+                            tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
+                            tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
+                            tmpDevicePort.toPortName = sheet.Cell(r, deviceToPortNameColumn).Value.ToString();
+                            MyDevicePorts.Add(tmpDevicePort);
                         }
-                        tmpDevicePort.fromCableID = id;
-                        tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
-                        tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
-                        tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
-                        tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
-                        tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
-                        tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
-                        tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
-                        tmpDevicePort.toPortName = sheet.Cell(r, deviceToPortNameColumn).Value.ToString();
-                        MyDevicePorts.Add(tmpDevicePort);
                     }
                 }
             }
         }
 
 //== print
-//        printMyDevicePorts();
+        printMyDevicePorts();
 
 //== check duplicate CableID
         checkDuplicateCableId();
@@ -179,43 +189,68 @@ public class DataCheckApp : ConsoleAppBase
 
 //== check 
         checkConnectXConnect();
+
+//== finish
+        if (isAllPass)
+        {
+            logger.ZLogInformation($"== [Congratulations!] すべての確認項目をパスしました ==");
+        }
+        logger.ZLogInformation($"==== tool finish ====");
+
     }
 
     private void printMyDevicePorts()
     {
+        logger.ZLogTrace($"== start print ==");
         foreach (var device in MyDevicePorts)
         {
-            logger.ZLogDebug($"CableID:{device.fromCableID}, connect:{device.fromConnect}, fromHost:{device.fromHostName} fromPort:{device.fromPortName} toHost:{device.toHostName} toPort:{device.toPortName}");
+            logger.ZLogTrace($"CableID:{device.fromCableID},connect:{device.fromConnect},(from) Device:{device.fromDeviceName},Host:{device.fromHostName},Model:{device.toModelName},Port:{device.fromPortName},(to) Device:{device.toDeviceName},Host:{device.toHostName},Model:{device.toModelName},Port:{device.toPortName}");
         }
+        logger.ZLogTrace($"== end print ==");
     }
 
     private void checkDuplicateCableId()
     {
+        logger.ZLogInformation($"== start ケーブルIDの重複の確認 ==");
+        bool isError = false;
         Dictionary<int, string> cableId = new Dictionary<int, string>();
         foreach (var device in MyDevicePorts)
         {
             try
             {
-                cableId.Add(device.fromCableID, device.fromHostName + device.fromPortName);
+                cableId.Add(device.fromCableID, device.fromHostName +"&"+ device.fromPortName);
             }
             catch (System.ArgumentException)
             {
-                logger.ZLogError($"[checkDuplicateCableId] CableId is duplicate! at cableId:{device.fromCableID}");
+                isError = true;
+                logger.ZLogError($"重複エラー ケーブルID:{device.fromCableID} ( {cableId[device.fromCableID]} | {device.fromHostName}&{device.fromPortName} )");
             }
             catch (System.Exception)
             {
                 throw;
             }
         }
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ケーブルIDの重複が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ケーブルIDの重複はありませんでした");
+        }
+        logger.ZLogInformation($"== end ケーブルIDの重複の確認 ==");
     }
 
-    private bool isIgnoreDevice(string device, Dictionary<string,string> dicIgnore)
+    private bool isNotIgnoreDevice(string device, Dictionary<string,string> dicIgnore)
     {
         return !dicIgnore.ContainsKey(device);
     }
 
     private void checkHostNameLength()
     {
+        logger.ZLogInformation($"== start ホスト名の長さの確認 ==");
+        bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
         foreach (var ignore in ignoreDeviceNameToHostNameLength.Split(','))
@@ -230,10 +265,19 @@ public class DataCheckApp : ConsoleAppBase
         {
             if (device.fromHostName.Length != deviceHostNameLength)
             {
-                if (isIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
+                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
                 {
-                    logger.ZLogError($"[checkHostNameLength] hostname(from) length is miss! at cableId:{device.fromCableID} fromDeivcename:{device.fromDeviceName}");
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側ホスト名:{device.fromHostName}");
                 }
+                else
+                {
+                    logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName}");
+                }
+            }
+            else
+            {
+                logger.ZLogTrace($"[checkHostNameLength] 文字数({deviceHostNameLength})で一致しました ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName}");
             }
 
             if (device.fromConnect == wordConnect)
@@ -242,18 +286,39 @@ public class DataCheckApp : ConsoleAppBase
                 {
                     if (device.toHostName.Length != rosetteHostNameLength)
                     {
-                        if (isIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+                        if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
                         {
-                            logger.ZLogError($"[checkHostNameLength] hostname(to) length is miss! at cableId:{device.fromCableID} toDevicename:{device.toDeviceName}");
+                            isError = true;
+                            logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} To側ホスト名:{device.toHostName}");
+                        }
+                        else
+                        {
+                            logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
                         }
                     }
                 }
+                else
+                {
+                    logger.ZLogTrace($"[checkHostNameLength] 文字数({deviceHostNameLength})で一致しました ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName}");
+                }
             }
         }
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ホスト名の長さの不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ホスト名の長さの不一致はありませんでした");
+        }
+        logger.ZLogInformation($"== end ホスト名の長さの確認 ==");
     }
 
     private void checkHostNamePrefix(string prefix)
     {
+        logger.ZLogInformation($"== start ホスト名の接頭語の確認 ==");
+        bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
         foreach (var ignore in ignoreDeviceNameToHostNamePrefix.Split(','))
@@ -264,45 +329,95 @@ public class DataCheckApp : ConsoleAppBase
         string wordConnect = config.Value.WordConnect;
         foreach (var device in MyDevicePorts)
         {
-            //hostname.StartsWith(prefix)
             if (!device.fromHostName.StartsWith(prefix))
             {
-                if (isIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
+                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
                 {
-                    logger.ZLogError($"[checkHostNamePrefix] hostname(from) prefix is not match! at cableId:{device.fromCableID} prefix:{prefix} fromHostname:{device.fromHostName}");
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} 接頭語:{prefix} From側ホスト名:{device.fromHostName}");
                 }
+                else
+                {
+                    logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName}");
+                }
+            }
+            else
+            {
+                logger.ZLogTrace($"[checkHostNamePrefix] 接頭語({prefix})で一致しました ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName}");
             }
 
             if (device.fromConnect == wordConnect)
             {
                 if (!device.toHostName.StartsWith(prefix))
                 {
-                    if (isIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+                    if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
                     {
-                        logger.ZLogError($"[checkHostNamePrefix] hostname(to) length is not match! at cableId:{device.fromCableID} prefix:{prefix} toHostname:{device.toHostName}");
+                        isError = true;
+                        logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} 接頭語:{prefix} To側ホスト名:{device.toHostName}");
                     }
+                    else
+                    {
+                        logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkHostNamePrefix] 接頭語({prefix})で一致しました ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName}");
                 }
             }
         }
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ホスト名の接頭語の不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ホスト名の接頭語の不一致はありませんでした");
+        }
+        logger.ZLogInformation($"== end ホスト名の接頭語の確認 ==");
     }
 
     void checkToDeviceAtFromConnect()
     {
+        logger.ZLogInformation($"== start 「接続」で対向先の記載の確認 ==");
+        bool isError = false;
         string wordConnect = config.Value.WordConnect;
         foreach (var device in MyDevicePorts)
         {
-            if (!string.IsNullOrEmpty(device.toHostName))
+            if (device.fromConnect.Equals(wordConnect))
             {
-                if (!device.fromConnect.Equals(wordConnect))
+                if (string.IsNullOrEmpty(device.toHostName))
                 {
-                    logger.ZLogError($"[checkToDeviceAtFromConnect] device(to) is alive.but not Connect! at cableId:{device.fromCableID} fromHostname:{device.fromHostName}");
+                    isError = true;
+                    logger.ZLogError($"ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} は({wordConnect})であるが To側ホスト名が記載されていない");
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkToDeviceAtFromConnect] ケーブルID:{device.fromCableID} は({wordConnect})であり ({device.toHostName}) と記載あるので問題なし");
                 }
             }
+            else
+            {
+                logger.ZLogTrace($"[checkToDeviceAtFromConnect] ケーブルID:{device.fromCableID} は({wordConnect})以外のため確認しない");
+            }
         }
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] 「接続」で対向先の不記載が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] 「接続」で対向先は記載されていました");
+        }
+        logger.ZLogInformation($"== end 「接続」で対向先の記載の確認 ==");
     }
 
     void checkConnectXConnect()
     {
+        logger.ZLogInformation($"== start 接続される装置間の接続ポートの確認 ==");
+        bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
         foreach (var ignore in ignoreDeviceNameToConnectXConnect.Split(','))
@@ -314,38 +429,75 @@ public class DataCheckApp : ConsoleAppBase
         Dictionary<string, string> connectxconnect = new Dictionary<string, string>();
         foreach (var device in MyDevicePorts)
         {
-            if (device.fromConnect.Equals(wordConnect) && isIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+            if (device.fromConnect.Equals(wordConnect))
             {
-                try
+                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
                 {
-                    connectxconnect.Add(device.fromHostName + "&" + device.fromPortName, device.toHostName + "&" + device.toPortName);
+                    try
+                    {
+                        connectxconnect.Add(device.fromHostName + "&" + device.fromPortName, device.toHostName + "&" + device.toPortName);
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        isError = true;
+                        logger.ZLogError($"エラー ホスト名とポート番号の組み合わせが重複して記載されています({device.fromHostName + "&" + device.fromPortName}) 2回目の出現ケーブルID:{device.fromCableID}");
+                    }
+                    catch (System.Exception)
+                    {
+                        throw;
+                    }
                 }
-                catch (System.ArgumentException)
+                else
                 {
-                    logger.ZLogError($"[checkConnectXConnect] duplicate! at cableId:{device.fromCableID}");
-                }
-                catch (System.Exception)
-                {
-                    throw;
+                    logger.ZLogTrace($"[checkConnectXConnect] 除外しました cableId:{device.fromCableID} toDevicename:{device.toDeviceName}");
                 }
             }
         }
 
         foreach (var key in connectxconnect.Keys)
         {
-//            logger.ZLogInformation($"{key}");
             string toValue = connectxconnect[key];
             if (!connectxconnect.ContainsKey(toValue))
             {
-                logger.ZLogError($"[checkConnectXConnect] toKey:{toValue} is miss! fromKey:{key}");
+                isError = true;
+                logger.ZLogError($"エラー From({key})に対するTo({toValue})が見つかりません");
+            }
+            else
+            {
+                string fromValue = connectxconnect[toValue];
+                if (!key.Equals(fromValue))
+                {
+                    isError = true;
+                    logger.ZLogTrace($"エラー 元のkey({key})と検索した値から再検索したkey({fromValue})が不一致です");
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkConnectXConnect] チェック通過 From({key})");
+                }
             }
         }
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] 接続される装置間の接続ポートの不一致が発見が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] 接続される装置間の接続ポートの不一致はありませんでした");
+        }
+        logger.ZLogInformation($"== end 接続される装置間の接続ポートの確認 ==");
     }
 
     private string getTime()
     {
         var jstTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time");
         return TimeZoneInfo.ConvertTimeFromUtc(DateTime.UtcNow, jstTimeZoneInfo).ToString("yyyy-MM-dd'T'HH:mm:sszzz");
+    }
+
+    private string getMyFileVersion()
+    {
+        System.Diagnostics.FileVersionInfo ver = System.Diagnostics.FileVersionInfo.GetVersionInfo(System.Reflection.Assembly.GetExecutingAssembly().Location);
+        return ver.InternalName + "(" + ver.FileVersion + ")";
     }
 
 }
