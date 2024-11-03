@@ -70,7 +70,7 @@ public class DataCheckApp : ConsoleAppBase
     }
 
 //    [Command("")]
-    public void Check(string excelpath, string prefix)
+    public void Check(string excelpath, string prefix, int devicelength, int rosettelength)
     {
 //== start
         logger.ZLogInformation($"==== tool {getMyFileVersion()} ====");
@@ -98,9 +98,9 @@ public class DataCheckApp : ConsoleAppBase
         int deviceToPortNameColumn = config.Value.DeviceToPortNameColumn;
         string wordConnect = config.Value.WordConnect;
         string wordDisconnect = config.Value.WordDisconnect;
-        int hostNameLength = config.Value.DeviceHostNameLength;
+        int hostNameLength = devicelength;
         string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
-        int rosetteHostNameLength = config.Value.RosetteHostNameLength;
+        int rosetteHostNameLength = rosettelength;
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
 
@@ -182,7 +182,7 @@ public class DataCheckApp : ConsoleAppBase
         checkToDeviceAtFromConnect();
 
 //== check hostname count
-        checkHostNameLength();
+        checkHostNameLength(hostNameLength, rosetteHostNameLength);
 
 //== check hostname prefix
         checkHostNamePrefix(prefix);
@@ -247,7 +247,7 @@ public class DataCheckApp : ConsoleAppBase
         return !dicIgnore.ContainsKey(device);
     }
 
-    private void checkHostNameLength()
+    private void checkHostNameLength(int deviceHostNameLength, int rosetteHostNameLength)
     {
         logger.ZLogInformation($"== start ホスト名の長さの確認 ==");
         bool isError = false;
@@ -259,8 +259,6 @@ public class DataCheckApp : ConsoleAppBase
         }
 
         string wordConnect = config.Value.WordConnect;
-        int deviceHostNameLength = config.Value.DeviceHostNameLength;
-        int rosetteHostNameLength = config.Value.RosetteHostNameLength;
         foreach (var device in MyDevicePorts)
         {
             if (device.fromHostName.Length != deviceHostNameLength)
@@ -519,9 +517,7 @@ public class MyConfig
     public int DeviceToPortNameColumn {get; set;} = -1;
     public string WordConnect {get; set;} = "";
     public string WordDisconnect {get; set;} = "";
-    public int DeviceHostNameLength {get; set;} = 0;
     public string IgnoreDeviceNameToHostNameLength {get; set;} = "";
-    public int RosetteHostNameLength {get; set;} = 0;
     public string IgnoreDeviceNameToHostNamePrefix {get; set;} = "";
     public string IgnoreDeviceNameToConnectXConnect {get; set;} = "";
 }
