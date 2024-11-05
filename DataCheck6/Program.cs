@@ -92,6 +92,7 @@ public class DataCheckApp : ConsoleAppBase
         int deviceFromHostNameColumn = config.Value.DeviceFromHostNameColumn;
         int deviceFromModelNameColumn = config.Value.DeviceFromModelNameColumn;
         int deviceFromPortNameColumn = config.Value.DeviceFromPortNameColumn;
+        int deviceFromConnectorNameColumn = config.Value.DeviceFromConnectorNameColumn;
         int deviceToDeviceNameColumn = config.Value.DeviceToDeviceNameColumn;
         int deviceToModelNameColumn = config.Value.DeviceToModelNameColumn;
         int deviceToHostNameColumn = config.Value.DeviceToHostNameColumn;
@@ -103,6 +104,7 @@ public class DataCheckApp : ConsoleAppBase
         int rosetteHostNameLength = rosettelength;
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
 
         logger.ZLogInformation($"== パラメーター ==");
         logger.ZLogInformation($"対象:{excelpath}");
@@ -161,6 +163,7 @@ public class DataCheckApp : ConsoleAppBase
                             tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
                             tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
                             tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
+                            tmpDevicePort.fromConnectorName = sheet.Cell(r, deviceFromConnectorNameColumn).Value.ToString();
                             tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
                             tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
                             tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
@@ -253,9 +256,15 @@ public class DataCheckApp : ConsoleAppBase
         bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
         foreach (var ignore in ignoreDeviceNameToHostNameLength.Split(','))
         {
             dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
         }
 
         string wordConnect = config.Value.WordConnect;
@@ -263,14 +272,14 @@ public class DataCheckApp : ConsoleAppBase
         {
             if (device.fromHostName.Length != deviceHostNameLength)
             {
-                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
+                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                 {
                     isError = true;
                     logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側ホスト名:{device.fromHostName}");
                 }
                 else
                 {
-                    logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName}");
+                    logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側コネクター形状:{device.fromConnectorName}");
                 }
             }
             else
@@ -284,14 +293,14 @@ public class DataCheckApp : ConsoleAppBase
                 {
                     if (device.toHostName.Length != rosetteHostNameLength)
                     {
-                        if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+                        if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                         {
                             isError = true;
                             logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} To側ホスト名:{device.toHostName}");
                         }
                         else
                         {
-                            logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
+                            logger.ZLogTrace($"[checkHostNameLength] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
                         }
                     }
                 }
@@ -319,9 +328,15 @@ public class DataCheckApp : ConsoleAppBase
         bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
         foreach (var ignore in ignoreDeviceNameToHostNamePrefix.Split(','))
         {
             dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
         }
 
         string wordConnect = config.Value.WordConnect;
@@ -329,14 +344,14 @@ public class DataCheckApp : ConsoleAppBase
         {
             if (!device.fromHostName.StartsWith(prefix))
             {
-                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName))
+                if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                 {
                     isError = true;
                     logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} 接頭語:{prefix} From側ホスト名:{device.fromHostName}");
                 }
                 else
                 {
-                    logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName}");
+                    logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側コネクター形状:{device.fromConnectorName}");
                 }
             }
             else
@@ -348,14 +363,14 @@ public class DataCheckApp : ConsoleAppBase
             {
                 if (!device.toHostName.StartsWith(prefix))
                 {
-                    if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+                    if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                     {
                         isError = true;
                         logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} 接頭語:{prefix} To側ホスト名:{device.toHostName}");
                     }
                     else
                     {
-                        logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
+                        logger.ZLogTrace($"[checkHostNamePrefix] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
                     }
                 }
                 else
@@ -418,9 +433,15 @@ public class DataCheckApp : ConsoleAppBase
         bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
         foreach (var ignore in ignoreDeviceNameToConnectXConnect.Split(','))
         {
             dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
         }
 
         string wordConnect = config.Value.WordConnect;
@@ -429,7 +450,7 @@ public class DataCheckApp : ConsoleAppBase
         {
             if (device.fromConnect.Equals(wordConnect))
             {
-                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName))
+                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                 {
                     try
                     {
@@ -447,7 +468,7 @@ public class DataCheckApp : ConsoleAppBase
                 }
                 else
                 {
-                    logger.ZLogTrace($"[checkConnectXConnect] 除外しました cableId:{device.fromCableID} toDevicename:{device.toDeviceName}");
+                    logger.ZLogTrace($"[checkConnectXConnect] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
                 }
             }
         }
@@ -511,6 +532,7 @@ public class MyConfig
     public int DeviceFromModelNameColumn {get; set;} = -1;
     public int DeviceFromHostNameColumn {get; set;} = -1;
     public int DeviceFromPortNameColumn {get; set;} = -1;
+    public int DeviceFromConnectorNameColumn {get; set;} = -1;
     public int DeviceToDeviceNameColumn {get; set;} = -1;
     public int DeviceToModelNameColumn {get; set;} = -1;
     public int DeviceToHostNameColumn {get; set;} = -1;
@@ -520,6 +542,7 @@ public class MyConfig
     public string IgnoreDeviceNameToHostNameLength {get; set;} = "";
     public string IgnoreDeviceNameToHostNamePrefix {get; set;} = "";
     public string IgnoreDeviceNameToConnectXConnect {get; set;} = "";
+    public string IgnoreConnectorNameToAll {get; set;} = "";
 }
 
 public class MyDevicePort
@@ -531,6 +554,7 @@ public class MyDevicePort
     public string fromModelName = "";
     public string fromHostName = "";
     public string fromPortName = "";
+    public string fromConnectorName = "";
 
     public string toDeviceName = "";
     public string toModelName = "";
