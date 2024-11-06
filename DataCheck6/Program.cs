@@ -396,14 +396,27 @@ public class DataCheckApp : ConsoleAppBase
         logger.ZLogInformation($"== start 「接続」で対向先の記載の確認 ==");
         bool isError = false;
         string wordConnect = config.Value.WordConnect;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
+        }
         foreach (var device in MyDevicePorts)
         {
             if (device.fromConnect.Equals(wordConnect))
             {
                 if (string.IsNullOrEmpty(device.toHostName))
                 {
-                    isError = true;
-                    logger.ZLogError($"ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} は({wordConnect})であるが To側ホスト名が記載されていない");
+                    if (isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
+                    {
+                        isError = true;
+                        logger.ZLogError($"ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} は({wordConnect})であるが To側ホスト名が記載されていない");
+                    }
+                    else
+                    {
+                        logger.ZLogTrace($"[checkToDeviceAtFromConnect] 除外しました ケーブルID:{device.fromCableID} From側コネクター形状:{device.fromConnectorName}");
+                    }
                 }
                 else
                 {
