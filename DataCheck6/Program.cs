@@ -88,12 +88,16 @@ public class DataCheckApp : ConsoleAppBase
 //== init
         int deviceFromCableIdColumn = config.Value.DeviceFromCableIdColumn;
         int deviceFromConnectColumn = config.Value.DeviceFromConnectColumn;
+        int deviceFromFloorNameColumn = config.Value.DeviceFromFloorNameColumn;
         int deviceFromDeviceNameColumn = config.Value.DeviceFromDeviceNameColumn;
+        int deviceFromDeviceNumberColumn = config.Value.DeviceFromDeviceNumberColumn;
         int deviceFromHostNameColumn = config.Value.DeviceFromHostNameColumn;
         int deviceFromModelNameColumn = config.Value.DeviceFromModelNameColumn;
         int deviceFromPortNameColumn = config.Value.DeviceFromPortNameColumn;
         int deviceFromConnectorNameColumn = config.Value.DeviceFromConnectorNameColumn;
+        int deviceToFloorNameColumn = config.Value.DeviceToFloorNameColumn;
         int deviceToDeviceNameColumn = config.Value.DeviceToDeviceNameColumn;
+        int deviceToDeviceNumberColumn = config.Value.DeviceToDeviceNumberColumn;
         int deviceToModelNameColumn = config.Value.DeviceToModelNameColumn;
         int deviceToHostNameColumn = config.Value.DeviceToHostNameColumn;
         int deviceToPortNameColumn = config.Value.DeviceToPortNameColumn;
@@ -105,6 +109,7 @@ public class DataCheckApp : ConsoleAppBase
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
         string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+        string wordDeviceToHostNameList = config.Value.WordDeviceToHostNameList;
 
         logger.ZLogInformation($"== パラメーター ==");
         logger.ZLogInformation($"対象:{excelpath}");
@@ -159,12 +164,16 @@ public class DataCheckApp : ConsoleAppBase
                                     continue;
                             }
                             tmpDevicePort.fromCableID = id;
+                            tmpDevicePort.fromFloorName = sheet.Cell(r, deviceFromFloorNameColumn).Value.ToString();
                             tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
+                            tmpDevicePort.fromDeviceNumber = sheet.Cell(r, deviceFromDeviceNumberColumn).Value.ToString();
                             tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
                             tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
                             tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
                             tmpDevicePort.fromConnectorName = sheet.Cell(r, deviceFromConnectorNameColumn).Value.ToString();
+                            tmpDevicePort.toFloorName = sheet.Cell(r, deviceToFloorNameColumn).Value.ToString();
                             tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
+                            tmpDevicePort.toDeviceNumber = sheet.Cell(r, deviceToDeviceNumberColumn).Value.ToString();
                             tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
                             tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
                             tmpDevicePort.toPortName = sheet.Cell(r, deviceToPortNameColumn).Value.ToString();
@@ -189,6 +198,12 @@ public class DataCheckApp : ConsoleAppBase
 
 //== check hostname prefix
         checkHostNamePrefix(prefix);
+
+//== check device word to hostName word
+        checkDeviceToHostName(prefix);
+
+//== check device&number to hostName
+        checkDeviceAndNumberToHostName();
 
 //== check 
         checkConnectXConnect();
@@ -391,6 +406,259 @@ public class DataCheckApp : ConsoleAppBase
         logger.ZLogInformation($"== end ホスト名の接頭語の確認 ==");
     }
 
+    private void checkDeviceToHostName(string prefix)
+    {
+        logger.ZLogInformation($"== start 装置名によるホスト名に含む文字列の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
+        string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+        Dictionary<string,string> dicDeviceToHostName = new Dictionary<string, string>();
+        string wordDeviceToHostNameList = config.Value.WordDeviceToHostNameList;
+        foreach (var ignore in ignoreDeviceNameToHostNamePrefix.Split(','))
+        {
+            dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
+        }
+        foreach (var keyAndValue in wordDeviceToHostNameList.Split(','))
+        {
+            string[] item = keyAndValue.Split('/');
+            dicDeviceToHostName.Add(item[0], item[1]);
+        }
+
+        string wordConnect = config.Value.WordConnect;
+        foreach (var device in MyDevicePorts)
+        {
+            if (dicDeviceToHostName.ContainsKey(device.fromDeviceName))
+            {
+                string hostname = device.fromHostName;
+                string targetHostname = hostname.Replace(prefix, "");
+                if (!targetHostname.Contains(dicDeviceToHostName[device.fromDeviceName]))
+                {
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} ホスト名に含む文字列:{dicDeviceToHostName[device.fromDeviceName]} From側ホスト名:{device.fromHostName}");
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkDeviceToHostName] ホスト名に含む文字列:{dicDeviceToHostName[device.fromDeviceName]}が正しく含まれています ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName}");
+                }
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogError($"定義エラー ケーブルID:{device.fromCableID} Fromデバイス名:{device.fromDeviceName}に対応するホスト名に含む文字列が定義されていません");
+            }
+
+            if (device.fromConnect == wordConnect)
+            {
+                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
+                {
+                    if (dicDeviceToHostName.ContainsKey(device.toDeviceName))
+                    {
+                        string hostname = device.toHostName;
+                        string targetHostname = hostname.Replace(prefix, "");
+                        if (!targetHostname.Contains(dicDeviceToHostName[device.toDeviceName]))
+                        {
+                            isError = true;
+                            logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} ホスト名に含む文字列:{dicDeviceToHostName[device.toDeviceName]} To側ホスト名:{device.toHostName}");
+                        }
+                        else
+                        {
+                            logger.ZLogTrace($"[checkDeviceToHostName] ホスト名に含む文字列:{dicDeviceToHostName[device.toDeviceName]}が正しく含まれています ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName}");
+                        }
+                    }
+                    else
+                    {
+                        isError = true;
+                        logger.ZLogError($"定義エラー ケーブルID:{device.fromCableID} Toデバイス名:{device.toDeviceName}に対応するホスト名に含む文字列が定義されていません");
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkDeviceToHostName] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] 装置名によるホスト名に含む文字列の不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] 装置名によるホスト名に含む文字列の不一致はありませんでした");
+        }
+        logger.ZLogInformation($"== end 装置名によるホスト名に含む文字列の確認 ==");
+    }
+
+    void checkDeviceAndNumberToHostName()
+    {
+        logger.ZLogInformation($"== start 装置名＆識別名とホスト名の一意の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
+        string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+        foreach (var ignore in ignoreDeviceNameToHostNamePrefix.Split(','))
+        {
+            dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
+        }
+
+        Dictionary<string,string> dicDeviceAndNumberToHostName = new Dictionary<string, string>();
+        Dictionary<string,string> dicHostNameToDeviceAndNumber = new Dictionary<string, string>();
+
+        string wordConnect = config.Value.WordConnect;
+        foreach (var device in MyDevicePorts)
+        {
+            try
+            {
+                dicDeviceAndNumberToHostName.Add(device.fromDeviceName + device.fromDeviceNumber, device.fromHostName);
+            }
+            catch (System.ArgumentException)
+            {
+                string tmp = dicDeviceAndNumberToHostName[device.fromDeviceName + device.fromDeviceNumber];
+                if (!tmp.Equals(device.fromHostName))
+                {
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} Fromデバイス名:{device.fromDeviceName + device.fromDeviceNumber} Fromホスト名:{device.fromHostName}");
+                }
+            }
+            catch (System.Exception)
+            {
+                throw;
+            }
+
+            try
+            {
+                dicHostNameToDeviceAndNumber.Add(device.fromHostName, device.fromDeviceName + device.fromDeviceNumber);
+            }
+            catch (System.ArgumentException)
+            {
+                string tmpDevice = device.fromDeviceName + device.fromDeviceNumber;
+                string tmp = dicHostNameToDeviceAndNumber[device.fromHostName];
+                if (!tmp.Equals(tmpDevice))
+                {
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} Fromデバイス名:{device.fromDeviceName + device.fromDeviceNumber} Fromホスト名:{device.fromHostName}");
+                }
+            }
+            catch (System.Exception)
+            {
+                throw;
+            }
+
+            if (device.fromConnect == wordConnect)
+            {
+                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
+                {
+                    try
+                    {
+                        dicDeviceAndNumberToHostName.Add(device.toDeviceName + device.toDeviceNumber, device.toHostName);
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        string tmp = dicDeviceAndNumberToHostName[device.toDeviceName + device.toDeviceNumber];
+                        if (!tmp.Equals(device.toHostName))
+                        {
+                            isError = true;
+                            logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} Toデバイス名:{device.toDeviceName + device.toDeviceNumber} Toホスト名:{device.toHostName}");
+                        }
+                    }
+                    catch (System.Exception)
+                    {
+                        throw;
+                    }
+
+                    try
+                    {
+                        dicHostNameToDeviceAndNumber.Add(device.toHostName, device.toDeviceName + device.toDeviceNumber);
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        string tmpDevice = device.toDeviceName + device.toDeviceNumber;
+                        string tmp = dicHostNameToDeviceAndNumber[device.toHostName];
+                        if (!tmp.Equals(tmpDevice))
+                        {
+                            isError = true;
+                            logger.ZLogError($"不一致エラー ケーブルID:{device.fromCableID} Toデバイス名:{device.toDeviceName + device.toDeviceNumber} Toホスト名:{device.toHostName}");
+                        }
+                    }
+                    catch (System.Exception)
+                    {
+                        throw;
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkDeviceAndNumberToHostName] 除外しました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
+                }
+            }
+        }
+
+        foreach (var key in dicDeviceAndNumberToHostName.Keys)
+        {
+            if (dicHostNameToDeviceAndNumber.ContainsKey(dicDeviceAndNumberToHostName[key]))
+            {
+                string deviceAndNumber = dicHostNameToDeviceAndNumber[dicDeviceAndNumberToHostName[key]];
+                if (key.Equals(deviceAndNumber))
+                {
+                    logger.ZLogTrace($"[checkDeviceAndNumberToHostName] 一致しました デバイス名:{deviceAndNumber} ホスト名:{dicDeviceAndNumberToHostName[key]}");
+                }
+                else
+                {
+                    isError = true;
+                    logger.ZLogError($"不一致エラー デバイス名:{deviceAndNumber} ホスト名:{dicDeviceAndNumberToHostName[key]}");
+                }
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogError($"キーエラー キー({key})が存在しません");
+            }
+        }
+        foreach (var key in dicHostNameToDeviceAndNumber.Keys)
+        {
+            if (dicDeviceAndNumberToHostName.ContainsKey(dicHostNameToDeviceAndNumber[key]))
+            {
+                string hostname = dicDeviceAndNumberToHostName[dicHostNameToDeviceAndNumber[key]];
+                if (key.Equals(hostname))
+                {
+                    logger.ZLogTrace($"[checkDeviceAndNumberToHostName] 一致しました ホスト名:{hostname} デバイス名:{dicHostNameToDeviceAndNumber[key]}");
+                }
+                else
+                {
+                    isError = true;
+                    logger.ZLogError($"不一致エラー ホスト名:{hostname} デバイス名:{dicHostNameToDeviceAndNumber[key]}");
+                }
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogError($"キーエラー キー({key})が存在しません");
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] 装置名＆識別名とホスト名の重複が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] 装置名＆識別名とホスト名は一意でした");
+        }
+        logger.ZLogInformation($"== end 装置名＆識別名とホスト名の一意の確認 ==");
+    }
+
     void checkToDeviceAtFromConnect()
     {
         logger.ZLogInformation($"== start 「接続」で対向先の記載の確認 ==");
@@ -541,12 +809,16 @@ public class MyConfig
 
     public int DeviceFromCableIdColumn {get; set;} = -1;
     public int DeviceFromConnectColumn {get; set;} = -1;
+    public int DeviceFromFloorNameColumn {get; set;} = -1;
     public int DeviceFromDeviceNameColumn {get; set;} = -1;
+    public int DeviceFromDeviceNumberColumn {get; set;} = -1;
     public int DeviceFromModelNameColumn {get; set;} = -1;
     public int DeviceFromHostNameColumn {get; set;} = -1;
     public int DeviceFromPortNameColumn {get; set;} = -1;
     public int DeviceFromConnectorNameColumn {get; set;} = -1;
+    public int DeviceToFloorNameColumn {get; set;} = -1;
     public int DeviceToDeviceNameColumn {get; set;} = -1;
+    public int DeviceToDeviceNumberColumn {get; set;} = -1;
     public int DeviceToModelNameColumn {get; set;} = -1;
     public int DeviceToHostNameColumn {get; set;} = -1;
     public int DeviceToPortNameColumn {get; set;} = -1;
@@ -556,6 +828,7 @@ public class MyConfig
     public string IgnoreDeviceNameToHostNamePrefix {get; set;} = "";
     public string IgnoreDeviceNameToConnectXConnect {get; set;} = "";
     public string IgnoreConnectorNameToAll {get; set;} = "";
+    public string WordDeviceToHostNameList {get; set;} = "";
 }
 
 public class MyDevicePort
@@ -563,13 +836,17 @@ public class MyDevicePort
     public int fromCableID = -1;
     public string fromConnect = "";
 
+    public string fromFloorName = "";
     public string fromDeviceName = "";
+    public string fromDeviceNumber = "";
     public string fromModelName = "";
     public string fromHostName = "";
     public string fromPortName = "";
     public string fromConnectorName = "";
 
+    public string toFloorName = "";
     public string toDeviceName = "";
+    public string toDeviceNumber = "";
     public string toModelName = "";
     public string toHostName = "";
     public string toPortName = "";
