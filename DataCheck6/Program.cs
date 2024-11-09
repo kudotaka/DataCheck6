@@ -110,6 +110,7 @@ public class DataCheckApp : ConsoleAppBase
         string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
         string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
         string wordDeviceToHostNameList = config.Value.WordDeviceToHostNameList;
+        string deviceNameToRosette = config.Value.DeviceNameToRosette;
 
         logger.ZLogInformation($"== パラメーター ==");
         logger.ZLogInformation($"対象:{excelpath}");
@@ -205,6 +206,9 @@ public class DataCheckApp : ConsoleAppBase
 //== check device&number to hostName
         checkDeviceAndNumberToHostName();
 
+//== check rosette
+        checkRosette();
+
 //== check 
         checkConnectXConnect();
 
@@ -263,6 +267,11 @@ public class DataCheckApp : ConsoleAppBase
     private bool isNotIgnoreDevice(string device, Dictionary<string,string> dicIgnore)
     {
         return !dicIgnore.ContainsKey(device);
+    }
+
+    private bool isDevice(string device, Dictionary<string,string> dicDevice)
+    {
+        return dicDevice.ContainsKey(device);
     }
 
     private void checkHostNameLength(int deviceHostNameLength, int rosetteHostNameLength)
@@ -788,6 +797,58 @@ public class DataCheckApp : ConsoleAppBase
         logger.ZLogInformation($"== end 接続される装置間の接続ポートの確認 ==");
     }
 
+    void checkRosette()
+    {
+        logger.ZLogInformation($"== start ローゼット名の一意の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicDeviceName = new Dictionary<string, string>();
+        string deviceNameToRosette = config.Value.DeviceNameToRosette;
+        foreach (var device in deviceNameToRosette.Split(','))
+        {
+            dicDeviceName.Add(device, "");
+        }
+
+        string wordConnect = config.Value.WordConnect;
+        Dictionary<string,int> dicRosetteName = new Dictionary<string, int>();
+        foreach (var device in MyDevicePorts)
+        {
+            if (device.fromConnect == wordConnect)
+            {
+                if (isDevice(device.toDeviceName, dicDeviceName))
+                {
+                    try
+                    {
+                        dicRosetteName.Add(device.toHostName, device.fromCableID);
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        isError = true;
+                        logger.ZLogError($"エラー ローゼット名が重複して記載されています({device.toHostName}) 初回の出現ケーブルID:{dicRosetteName[device.toHostName]} 重複回の出現ケーブルID:{device.fromCableID}");
+                    }
+                    catch (System.Exception)
+                    {
+                        throw;
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkRosette] 対象外としました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ローゼット名の重複が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ローゼット名の重複はありませんでした");
+        }
+        logger.ZLogInformation($"== end ローゼット名の一意の確認 ==");
+    }
+
     private string getTime()
     {
         var jstTimeZoneInfo = TimeZoneInfo.FindSystemTimeZoneById("Tokyo Standard Time");
@@ -829,6 +890,7 @@ public class MyConfig
     public string IgnoreDeviceNameToConnectXConnect {get; set;} = "";
     public string IgnoreConnectorNameToAll {get; set;} = "";
     public string WordDeviceToHostNameList {get; set;} = "";
+    public string DeviceNameToRosette {get; set;} = "";
 }
 
 public class MyDevicePort
