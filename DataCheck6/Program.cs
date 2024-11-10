@@ -1,4 +1,5 @@
-﻿using ClosedXML.Excel;
+﻿using System.Text;
+using ClosedXML.Excel;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -57,9 +58,13 @@ app.Run();
 public class DataCheckApp : ConsoleAppBase
 {
     bool isAllPass = true;
+    const int HOST_NAME_COLUMN = 1;
+    const int USED_PORT_COLUMN = 2;
 
     readonly ILogger<DataCheckApp> logger;
     readonly IOptions<MyConfig> config;
+
+    Dictionary<string, List<string>> MyHostNameUsedPorts = new Dictionary<string, List<string>>();
 
     List<MyDevicePort> MyDevicePorts = new List<MyDevicePort>();
 
@@ -70,15 +75,54 @@ public class DataCheckApp : ConsoleAppBase
     }
 
 //    [Command("")]
-    public void Check(string excelpath, string prefix, int devicelength, int rosettelength)
+    public void Check(string diagram, string excelpath, string prefix, int devicelength, int rosettelength)
     {
 //== start
         logger.ZLogInformation($"==== tool {getMyFileVersion()} ====");
         
+        if (!File.Exists(diagram))
+        {
+            logger.ZLogError($"[NG] target diagrm file is missing.");
+            return;
+        }
         if (!File.Exists(excelpath))
         {
-            logger.ZLogError($"target excel file is missing.");
+            logger.ZLogError($"[NG] target excel file is missing.");
             return;
+        }
+
+        logger.ZLogInformation($"== パラメーター ==");
+        logger.ZLogInformation($"対象:{diagram}");
+        FileStream fsDiagram = new FileStream(diagram, FileMode.Open, FileAccess.Read, FileShare.Read);
+        using XLWorkbook xlWorkbookDiagram = new XLWorkbook(fsDiagram);
+        IXLWorksheets sheetsDiagram = xlWorkbookDiagram.Worksheets;
+        foreach (IXLWorksheet? sheet in sheetsDiagram)
+        {
+            if (sheet != null && sheet.Name == "diagram")
+            {
+                int lastUsedRowNumber = sheet.LastRowUsed() == null ? 0 : sheet.LastRowUsed().RowNumber();
+                logger.ZLogInformation($"ネットワーク構成図:{sheet.Cell(1, 2).Value}, 最後の行:{lastUsedRowNumber}");
+                string tmpHostname = "";
+                for (int r = 3; r < lastUsedRowNumber + 1; r++)
+                {
+                    List<string> tmpUsedPorts = new List<string>();
+                    tmpHostname = sheet.Cell(r, HOST_NAME_COLUMN).Value.ToString();
+                    string usedPorts = sheet.Cell(r, USED_PORT_COLUMN).Value.ToString();
+                    foreach (var port in usedPorts.Split(";"))
+                    {
+                        if (!string.IsNullOrEmpty(port))
+                        {
+                            tmpUsedPorts.Add(port.TrimStart().TrimEnd());
+                        }
+                    }
+                    MyHostNameUsedPorts.Add(tmpHostname, tmpUsedPorts);                
+                }
+            }
+            else
+            {
+                isAllPass = false;
+                logger.ZLogError($"[NG] {diagram}ファイル内にシート名：diagramが見つかりませんでした");
+            }
         }
 
         FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -186,7 +230,11 @@ public class DataCheckApp : ConsoleAppBase
         }
 
 //== print
+        printMyHostNameUsedPorts();
         printMyDevicePorts();
+
+//== Diagram VS CableList
+        checkDiagramVsCableList();
 
 //== check duplicate CableID
         checkDuplicateCableId();
@@ -219,6 +267,16 @@ public class DataCheckApp : ConsoleAppBase
         }
         logger.ZLogInformation($"==== tool finish ====");
 
+    }
+
+    private void printMyHostNameUsedPorts()
+    {
+        logger.ZLogTrace($"== start print ==");
+        foreach (var hostname in MyHostNameUsedPorts.Keys)
+        {
+            logger.ZLogTrace($"ホスト名:{hostname},使用済ポート:{string.Join(";",MyHostNameUsedPorts[hostname])}");
+        }
+        logger.ZLogTrace($"== end print ==");
     }
 
     private void printMyDevicePorts()
@@ -666,6 +724,77 @@ public class DataCheckApp : ConsoleAppBase
             logger.ZLogInformation($"[OK] 装置名＆識別名とホスト名は一意でした");
         }
         logger.ZLogInformation($"== end 装置名＆識別名とホスト名の一意の確認 ==");
+    }
+
+    void checkDiagramVsCableList()
+    {
+        logger.ZLogInformation($"== start ネットワーク構成図とケーブルリストの接続ポートの一致の確認 ==");
+        bool isError = false;
+        string wordConnect = config.Value.WordConnect;
+        Dictionary<string,List<string>> dicFromCableList = new Dictionary<string, List<string>>();
+        foreach (var device in MyDevicePorts)
+        {
+            if (device.fromConnect.Equals(wordConnect))
+            {
+                try
+                {
+                    dicFromCableList.Add(device.fromHostName, new List<string>());
+                }
+                catch (System.ArgumentException)
+                {
+                    logger.ZLogTrace($"nothing {device.fromHostName}");
+                }
+                catch (System.Exception)
+                {
+                    throw;
+                }
+                dicFromCableList[device.fromHostName].Add(device.fromPortName);
+            }
+            else
+            {
+                logger.ZLogTrace($"[checkDiagramVsCableList] ケーブルID:{device.fromCableID} は({wordConnect})以外のため確認しない");
+            }
+        }
+
+        var listCableKeys = dicFromCableList.Keys;
+        var listDiagramKeys = MyHostNameUsedPorts.Keys;
+        var diffs = listCableKeys.Except(listDiagramKeys).Union(listDiagramKeys.Except(listCableKeys));
+        if (diffs.Count() > 0)
+        {
+            isError = true;
+            logger.ZLogError($"ケーブルリストとネットワーク構成にFromホスト名({string.Join(",",diffs)})の差分が発見されました");                
+        }
+        else
+        {
+            logger.ZLogTrace($"[checkDiagramVsCableList] ケーブルリストとネットワーク構成のFromホスト名は一致しました");
+
+            foreach (var key in listCableKeys)
+            {
+                var listCablePorts = dicFromCableList[key];
+                var listDiagramPorts = MyHostNameUsedPorts[key];
+                var diffPorts = listCablePorts.Except(listDiagramPorts).Union(listDiagramPorts.Except(listCablePorts));
+                if (diffPorts.Count() > 0)
+                {
+                    isError = true;
+                    logger.ZLogError($"ケーブルリストとネットワーク構成にFromホスト名({key})のポート({string.Join(",",diffPorts)})の差分が発見されました");                
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkDiagramVsCableList] ケーブルリストとネットワーク構成のFromホスト名({key})のポートは一致しました");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ネットワーク構成図とケーブルリストの接続ポートの不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ネットワーク構成図とケーブルリストの接続ポートの一致しました");
+        }
+        logger.ZLogInformation($"== end ネットワーク構成図とケーブルリストの接続ポートの一致の確認 ==");
     }
 
     void checkToDeviceAtFromConnect()
