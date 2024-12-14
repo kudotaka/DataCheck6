@@ -64,6 +64,7 @@ public class DataCheckApp : ConsoleAppBase
     readonly ILogger<DataCheckApp> logger;
     readonly IOptions<MyConfig> config;
 
+    Dictionary<string, List<string>> MyModelAndPortName = new Dictionary<string, List<string>>();
     Dictionary<string, List<string>> MyHostNameUsedPorts = new Dictionary<string, List<string>>();
 
     List<MyDevicePort> MyDevicePorts = new List<MyDevicePort>();
@@ -229,9 +230,15 @@ public class DataCheckApp : ConsoleAppBase
             }
         }
 
+//== create ModelAndPortName
+        readModeAndPortName();
+
 //== print
         printMyHostNameUsedPorts();
         printMyDevicePorts();
+
+//== check CableList ModeAndPortName
+        checkModelAndPortName();
 
 //== Diagram VS CableList
         checkDiagramVsCableList();
@@ -267,6 +274,112 @@ public class DataCheckApp : ConsoleAppBase
         }
         logger.ZLogInformation($"==== tool finish ====");
 
+    }
+
+    private void readModeAndPortName()
+    {
+        logger.ZLogTrace($"== start readModeAndPortName ==");
+        string modelAndPortName = config.Value.ModelAndPortName;
+        foreach (var modelport in modelAndPortName.Split(','))
+        {
+            List<string> port = new List<string>();
+            string[] item = modelport.Split('|');
+            string model = item[0];
+            foreach (var portname in item[1].Split(';'))
+            {
+                if (string.IsNullOrEmpty(portname))
+                {
+                    logger.ZLogDebug($"ポート名が、NULLまたは空白でした");
+                    continue;
+                }
+                else
+                {
+                    port.Add(portname);
+                }
+            }
+            if (MyModelAndPortName.ContainsKey(model))
+            {
+                logger.ZLogDebug($"既にモデル名が登録されていました");
+                continue;
+            }
+            else
+            {
+                MyModelAndPortName.Add(model, port);
+            }
+        }
+
+        logger.ZLogTrace($"== end readModeAndPortName ==");
+    }
+
+    private void checkModelAndPortName()
+    {
+        logger.ZLogInformation($"== start モデル名とポート名の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicIgnoreModelName = new Dictionary<string, string>();
+        string ignoreModelName = config.Value.IgnoreModelName;
+        foreach (var ignore in ignoreModelName.Split(','))
+        {
+            dicIgnoreModelName.Add(ignore, "");
+        }
+
+        foreach (var device in MyDevicePorts)
+        {
+            // from
+            if (MyModelAndPortName.ContainsKey(device.fromModelName))
+            {
+                var portnames = MyModelAndPortName[device.fromModelName];
+                if (portnames.Contains(device.fromPortName))
+                {
+                    // OK
+                    logger.ZLogTrace($"モデル名とポート名 check OK");
+                }
+                else
+                {
+                    isError = true;
+                    logger.ZLogError($"ポート名の間違いが発見されました ケーブルID:{device.fromCableID} From側ポート名:{device.fromPortName}");
+                }
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogError($"モデル名が存在しませんでした ケーブルID:{device.fromCableID} From側モデル名:{device.fromModelName}");
+            }
+
+            // to
+            if (isNotIgnoreDevice(device.toModelName, dicIgnoreModelName))
+            {
+                if (MyModelAndPortName.ContainsKey(device.toModelName))
+                {
+                    var portnames = MyModelAndPortName[device.toModelName];
+                    if (portnames.Contains(device.toPortName))
+                    {
+                        // OK
+                        logger.ZLogTrace($"モデル名とポート名 check OK");
+                    }
+                    else
+                    {
+                        isError = true;
+                        logger.ZLogError($"ポート名の間違いが発見されました ケーブルID:{device.fromCableID} To側ポート名:{device.toPortName}");
+                    }
+                }
+                else
+                {
+                    isError = true;
+                    logger.ZLogError($"モデル名が存在しませんでした ケーブルID:{device.fromCableID} To側モデル名:{device.toModelName}");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] モデル名とポート名で、不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] モデル名とポート名は正しいことが確認されました");
+        }
+        logger.ZLogInformation($"== end モデル名とポート名の確認 ==");
     }
 
     private void printMyHostNameUsedPorts()
@@ -997,6 +1110,8 @@ public class MyConfig
 {
     public string Header {get; set;} = "";
 
+    public string ModelAndPortName {get; set;} = "";
+    public string IgnoreModelName {get; set;} = "";
     public int DeviceFromCableIdColumn {get; set;} = -1;
     public int DeviceFromConnectColumn {get; set;} = -1;
     public int DeviceFromFloorNameColumn {get; set;} = -1;
