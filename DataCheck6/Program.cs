@@ -146,6 +146,7 @@ public class DataCheckApp : ConsoleAppBase
 
 //== init
             int deviceFromCableIdColumn = config.Value.DeviceFromCableIdColumn;
+            int deviceFromKeyPortNameColumn = config.Value.DeviceFromKeyPortNameColumn;
             int deviceFromConnectColumn = config.Value.DeviceFromConnectColumn;
             int deviceFromFloorNameColumn = config.Value.DeviceFromFloorNameColumn;
             int deviceFromDeviceNameColumn = config.Value.DeviceFromDeviceNameColumn;
@@ -224,6 +225,7 @@ public class DataCheckApp : ConsoleAppBase
                                         continue;
                                 }
                                 tmpDevicePort.fromCableID = id;
+                                tmpDevicePort.fromKeyPortName = sheet.Cell(r, deviceFromKeyPortNameColumn).Value.ToString();
                                 tmpDevicePort.fromFloorName = sheet.Cell(r, deviceFromFloorNameColumn).Value.ToString();
                                 tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
                                 tmpDevicePort.fromDeviceNumber = sheet.Cell(r, deviceFromDeviceNumberColumn).Value.ToString();
@@ -250,6 +252,9 @@ public class DataCheckApp : ConsoleAppBase
 //== print
             printMyHostNameUsedPorts();
             printMyDevicePorts();
+
+//== check CableList KeyPortName vs PortName
+            checkKeyPortNameAndPortName();
 
 //== check CableList ModeAndPortName
             checkModelAndPortName();
@@ -333,6 +338,38 @@ public class DataCheckApp : ConsoleAppBase
         }
 
         logger.ZLogTrace($"== end readModeAndPortName ==");
+    }
+
+    private void checkKeyPortNameAndPortName()
+    {
+        logger.ZLogInformation($"== start From側の2つのポート名の一致の確認 ==");
+        bool isError = false;
+
+        foreach (var device in MyDevicePorts)
+        {
+            // from
+            if (device.fromKeyPortName.Equals(device.fromPortName))
+            {
+                // OK
+                logger.ZLogTrace($"From側の2つのポート名 check OK");
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogError($"From側の2つのポート名の不一致が発見されました ケーブルID:{device.fromCableID} From側Keyポート名:{device.fromKeyPortName} <-> From側ポート名:{device.fromPortName}");
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] From側の2つのポート名で、不一致が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] From側の2つのポート名の一致が確認されました");
+        }
+        logger.ZLogInformation($"== end From側の2つのポート名の一致の確認 ==");
     }
 
     private void checkModelAndPortName()
@@ -1137,6 +1174,7 @@ public class MyConfig
     public string ModelAndPortName {get; set;} = "";
     public string IgnoreModelName {get; set;} = "";
     public int DeviceFromCableIdColumn {get; set;} = -1;
+    public int DeviceFromKeyPortNameColumn {get; set;} = -1;
     public int DeviceFromConnectColumn {get; set;} = -1;
     public int DeviceFromFloorNameColumn {get; set;} = -1;
     public int DeviceFromDeviceNameColumn {get; set;} = -1;
@@ -1166,6 +1204,7 @@ public class MyDevicePort
     public int fromCableID = -1;
     public string fromConnect = "";
 
+    public string fromKeyPortName = "";
     public string fromFloorName = "";
     public string fromDeviceName = "";
     public string fromDeviceNumber = "";
