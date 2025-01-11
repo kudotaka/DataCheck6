@@ -1052,7 +1052,7 @@ public class DataCheckApp : ConsoleAppBase
                     catch (System.ArgumentException)
                     {
                         isError = true;
-                        logger.ZLogError($"エラー ホスト名とポート番号の組み合わせが重複して記載されています({device.fromHostName + "&" + device.fromPortName}) 2回目の出現ケーブルID:{device.fromCableID}");
+                        logger.ZLogError($"エラー ヒント:ホスト名とポート番号の組み合わせが重複して記載されています({device.fromHostName + "&" + device.fromPortName}) 2回目の出現ケーブルID:{device.fromCableID}");
                     }
                     catch (System.Exception)
                     {
@@ -1072,7 +1072,7 @@ public class DataCheckApp : ConsoleAppBase
             if (!connectxconnect.ContainsKey(toValue))
             {
                 isError = true;
-                logger.ZLogError($"エラー From({key})に対するTo({toValue})が見つかりません");
+                logger.ZLogError($"エラー ヒント:From({key})に対するTo({toValue})が見つかりません");
             }
             else
             {
@@ -1080,7 +1080,7 @@ public class DataCheckApp : ConsoleAppBase
                 if (!key.Equals(fromValue))
                 {
                     isError = true;
-                    logger.ZLogTrace($"エラー 元のkey({key})と検索した値から再検索したkey({fromValue})が不一致です");
+                    logger.ZLogError($"エラー ヒント:元のkey({key})と検索した値から再検索したkey({fromValue})が不一致です");
                 }
                 else
                 {
