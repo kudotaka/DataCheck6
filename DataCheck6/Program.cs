@@ -212,7 +212,7 @@ public class DataCheckApp : ConsoleAppBase
                                         }
                                         catch (System.FormatException)
                                         {
-                                            logger.ZLogError($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                                            logger.ZLogWarning($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
                                             continue;
                                         }
                                         catch (System.Exception)
@@ -221,7 +221,7 @@ public class DataCheckApp : ConsoleAppBase
                                         }
                                         break;
                                     default:
-                                        logger.ZLogError($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
+                                        logger.ZLogWarning($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
                                         continue;
                                 }
                                 tmpDevicePort.fromCableID = id;
@@ -301,6 +301,10 @@ public class DataCheckApp : ConsoleAppBase
         {
             logger.ZLogInformation($"== [Congratulations!] すべての確認項目をパスしました ==");
         }
+        else
+        {
+            logger.ZLogError($"== [ERROR] [NG]箇所があります 上の方の[NG]箇所から対処してください ==");
+        }
         logger.ZLogInformation($"==== tool finish ====");
 
     }
@@ -318,7 +322,7 @@ public class DataCheckApp : ConsoleAppBase
             {
                 if (string.IsNullOrEmpty(portname))
                 {
-                    logger.ZLogDebug($"ポート名が、NULLまたは空白でした");
+                    logger.ZLogDebug($"ポートNoが、NULLまたは空白でした");
                     continue;
                 }
                 else
@@ -328,7 +332,7 @@ public class DataCheckApp : ConsoleAppBase
             }
             if (MyModelAndPortName.ContainsKey(model))
             {
-                logger.ZLogDebug($"既にモデル名が登録されていました");
+                logger.ZLogDebug($"既に機種名が登録されていました");
                 continue;
             }
             else
@@ -342,7 +346,7 @@ public class DataCheckApp : ConsoleAppBase
 
     private void checkKeyPortNameAndPortName()
     {
-        logger.ZLogInformation($"== start From側の2つのポート名の一致の確認 ==");
+        logger.ZLogInformation($"== start From側の2箇所のポートNoの一致の確認 ==");
         bool isError = false;
 
         foreach (var device in MyDevicePorts)
@@ -351,30 +355,30 @@ public class DataCheckApp : ConsoleAppBase
             if (device.fromKeyPortName.Equals(device.fromPortName))
             {
                 // OK
-                logger.ZLogTrace($"From側の2つのポート名 check OK");
+                logger.ZLogTrace($"From側の2箇所のポートNo check OK");
             }
             else
             {
                 isError = true;
-                logger.ZLogError($"From側の2つのポート名の不一致が発見されました ケーブルID:{device.fromCableID} From側Keyポート名:{device.fromKeyPortName} <-> From側ポート名:{device.fromPortName}");
+                logger.ZLogError($"From側の2箇所のポートNoの不一致が発見されました ケーブルID:{device.fromCableID} From側KeyポートNo:{device.fromKeyPortName} <-> From側ポートNo:{device.fromPortName}");
             }
         }
 
         if (isError)
         {
             isAllPass = false;
-            logger.ZLogInformation($"[NG] From側の2つのポート名で、不一致が発見されました");
+            logger.ZLogInformation($"[NG] From側の2箇所のポートNoで、不一致が発見されました");
         }
         else
         {
-            logger.ZLogInformation($"[OK] From側の2つのポート名の一致が確認されました");
+            logger.ZLogInformation($"[OK] From側の2箇所のポートNoの一致が確認されました");
         }
-        logger.ZLogInformation($"== end From側の2つのポート名の一致の確認 ==");
+        logger.ZLogInformation($"== end From側の2箇所のポートNoの一致の確認 ==");
     }
 
     private void checkModelAndPortName()
     {
-        logger.ZLogInformation($"== start モデル名とポート名の確認 ==");
+        logger.ZLogInformation($"== start 機種名とポートNoの確認 ==");
         bool isError = false;
         Dictionary<string,string> dicIgnoreModelName = new Dictionary<string, string>();
         string ignoreModelName = config.Value.IgnoreModelName;
@@ -392,18 +396,18 @@ public class DataCheckApp : ConsoleAppBase
                 if (portnames.Contains(device.fromPortName))
                 {
                     // OK
-                    logger.ZLogTrace($"モデル名とポート名 check OK");
+                    logger.ZLogTrace($"機種名とポートNo check OK");
                 }
                 else
                 {
                     isError = true;
-                    logger.ZLogError($"ポート名の間違いが発見されました ケーブルID:{device.fromCableID} From側ポート名:{device.fromPortName}");
+                    logger.ZLogError($"ポートNoの間違いが発見されました ケーブルID:{device.fromCableID} From側ポートNo:{device.fromPortName}");
                 }
             }
             else
             {
                 isError = true;
-                logger.ZLogError($"モデル名が存在しませんでした ケーブルID:{device.fromCableID} From側モデル名:{device.fromModelName}");
+                logger.ZLogError($"機種名が存在しませんでした ケーブルID:{device.fromCableID} From側機種名:{device.fromModelName}");
             }
 
             // to
@@ -415,18 +419,18 @@ public class DataCheckApp : ConsoleAppBase
                     if (portnames.Contains(device.toPortName))
                     {
                         // OK
-                        logger.ZLogTrace($"モデル名とポート名 check OK");
+                        logger.ZLogTrace($"機種名とポートNo check OK");
                     }
                     else
                     {
                         isError = true;
-                        logger.ZLogError($"ポート名の間違いが発見されました ケーブルID:{device.fromCableID} To側ポート名:{device.toPortName}");
+                        logger.ZLogError($"ポートNoの間違いが発見されました ケーブルID:{device.fromCableID} To側ポートNo:{device.toPortName}");
                     }
                 }
                 else
                 {
                     isError = true;
-                    logger.ZLogError($"モデル名が存在しませんでした ケーブルID:{device.fromCableID} To側モデル名:{device.toModelName}");
+                    logger.ZLogError($"機種名が存在しませんでした ケーブルID:{device.fromCableID} To側機種名:{device.toModelName}");
                 }
             }
         }
@@ -434,13 +438,13 @@ public class DataCheckApp : ConsoleAppBase
         if (isError)
         {
             isAllPass = false;
-            logger.ZLogInformation($"[NG] モデル名とポート名で、不一致が発見されました");
+            logger.ZLogInformation($"[NG] 機種名とポートNoで、不一致が発見されました");
         }
         else
         {
-            logger.ZLogInformation($"[OK] モデル名とポート名は正しいことが確認されました");
+            logger.ZLogInformation($"[OK] 機種名とポートNoは正しいことが確認されました");
         }
-        logger.ZLogInformation($"== end モデル名とポート名の確認 ==");
+        logger.ZLogInformation($"== end 機種名とポートNoの確認 ==");
     }
 
     private void printMyHostNameUsedPorts()
@@ -649,7 +653,7 @@ public class DataCheckApp : ConsoleAppBase
 
     private void checkDeviceToHostName(string prefix)
     {
-        logger.ZLogInformation($"== start 装置名によるホスト名に含む文字列の確認 ==");
+        logger.ZLogInformation($"== start 機器種別によるホスト名に含む文字列の確認 ==");
         bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
@@ -728,18 +732,18 @@ public class DataCheckApp : ConsoleAppBase
         if (isError)
         {
             isAllPass = false;
-            logger.ZLogInformation($"[NG] 装置名によるホスト名に含む文字列の不一致が発見されました");
+            logger.ZLogInformation($"[NG] 機器種別によるホスト名に含む文字列の不一致が発見されました");
         }
         else
         {
-            logger.ZLogInformation($"[OK] 装置名によるホスト名に含む文字列の不一致はありませんでした");
+            logger.ZLogInformation($"[OK] 機器種別によるホスト名に含む文字列の不一致はありませんでした");
         }
-        logger.ZLogInformation($"== end 装置名によるホスト名に含む文字列の確認 ==");
+        logger.ZLogInformation($"== end 機器種別によるホスト名に含む文字列の確認 ==");
     }
 
     void checkDeviceAndNumberToHostName()
     {
-        logger.ZLogInformation($"== start 装置名＆識別名とホスト名の一意の確認 ==");
+        logger.ZLogInformation($"== start 機器種別＆識別名とホスト名の一意の確認 ==");
         bool isError = false;
         Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
@@ -891,13 +895,13 @@ public class DataCheckApp : ConsoleAppBase
         if (isError)
         {
             isAllPass = false;
-            logger.ZLogInformation($"[NG] 装置名＆識別名とホスト名の重複が発見されました");
+            logger.ZLogInformation($"[NG] 機器種別＆識別名とホスト名の重複が発見されました");
         }
         else
         {
-            logger.ZLogInformation($"[OK] 装置名＆識別名とホスト名は一意でした");
+            logger.ZLogInformation($"[OK] 機器種別＆識別名とホスト名は一意でした");
         }
-        logger.ZLogInformation($"== end 装置名＆識別名とホスト名の一意の確認 ==");
+        logger.ZLogInformation($"== end 機器種別＆識別名とホスト名の一意の確認 ==");
     }
 
     void checkDiagramVsCableList()
@@ -1052,7 +1056,7 @@ public class DataCheckApp : ConsoleAppBase
                     catch (System.ArgumentException)
                     {
                         isError = true;
-                        logger.ZLogError($"エラー ヒント:ホスト名とポート番号の組み合わせが重複して記載されています({device.fromHostName + "&" + device.fromPortName}) 2回目の出現ケーブルID:{device.fromCableID}");
+                        logger.ZLogError($"エラー ヒント情報:ホスト名とポート番号の組み合わせが重複して記載されています({device.fromHostName + "&" + device.fromPortName}) 2回目の出現ケーブルID:{device.fromCableID}");
                     }
                     catch (System.Exception)
                     {
@@ -1072,7 +1076,7 @@ public class DataCheckApp : ConsoleAppBase
             if (!connectxconnect.ContainsKey(toValue))
             {
                 isError = true;
-                logger.ZLogError($"エラー ヒント:From({key})に対するTo({toValue})が見つかりません");
+                logger.ZLogError($"エラー ヒント情報:From({key})に対するTo({toValue})が見つかりません");
             }
             else
             {
@@ -1080,7 +1084,7 @@ public class DataCheckApp : ConsoleAppBase
                 if (!key.Equals(fromValue))
                 {
                     isError = true;
-                    logger.ZLogError($"エラー ヒント:元のkey({key})と検索した値から再検索したkey({fromValue})が不一致です");
+                    logger.ZLogError($"エラー ヒント情報:From({key})の検索した値から再検索した値({fromValue})が不一致です");
                 }
                 else
                 {
