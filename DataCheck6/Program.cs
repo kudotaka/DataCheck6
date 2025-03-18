@@ -76,6 +76,227 @@ public class DataCheckApp : ConsoleAppBase
     }
 
 //    [Command("")]
+    public void Rosette(string excelpath)
+    {
+//== start
+        logger.ZLogInformation($"==== tool Rosette {getMyFileVersion()} ====");
+        
+        if (!File.Exists(excelpath))
+        {
+            logger.ZLogError($"[NG] target excel file is missing.");
+            return;
+        }
+
+        try
+        {
+            using FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using XLWorkbook xlWorkbook = new XLWorkbook(fs);
+            IXLWorksheets sheets = xlWorkbook.Worksheets;
+
+//== init
+            int deviceFromCableIdColumn = config.Value.DeviceFromCableIdColumn;
+            int deviceFromKeyPortNameColumn = config.Value.DeviceFromKeyPortNameColumn;
+            int deviceFromConnectColumn = config.Value.DeviceFromConnectColumn;
+            int deviceFromFloorNameColumn = config.Value.DeviceFromFloorNameColumn;
+            int deviceFromDeviceNameColumn = config.Value.DeviceFromDeviceNameColumn;
+            int deviceFromDeviceNumberColumn = config.Value.DeviceFromDeviceNumberColumn;
+            int deviceFromHostNameColumn = config.Value.DeviceFromHostNameColumn;
+            int deviceFromModelNameColumn = config.Value.DeviceFromModelNameColumn;
+            int deviceFromPortNameColumn = config.Value.DeviceFromPortNameColumn;
+            int deviceFromConnectorNameColumn = config.Value.DeviceFromConnectorNameColumn;
+            int deviceToFloorNameColumn = config.Value.DeviceToFloorNameColumn;
+            int deviceToDeviceNameColumn = config.Value.DeviceToDeviceNameColumn;
+            int deviceToDeviceNumberColumn = config.Value.DeviceToDeviceNumberColumn;
+            int deviceToModelNameColumn = config.Value.DeviceToModelNameColumn;
+            int deviceToHostNameColumn = config.Value.DeviceToHostNameColumn;
+            int deviceToPortNameColumn = config.Value.DeviceToPortNameColumn;
+            string wordConnect = config.Value.WordConnect;
+            string wordDisconnect = config.Value.WordDisconnect;
+            string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
+            string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
+            string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
+            string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+            string wordDeviceToHostNameList = config.Value.WordDeviceToHostNameList;
+            string deviceNameToRosette = config.Value.DeviceNameToRosette;
+
+            logger.ZLogInformation($"== パラメーター ==");
+            logger.ZLogInformation($"Checkファイル名:{excelpath}");
+
+            foreach (IXLWorksheet? sheet in sheets)
+            {
+                if (sheet != null)
+                {
+                    int lastUsedRowNumber = sheet.LastRowUsed() == null ? 0 : sheet.LastRowUsed().RowNumber();
+                    int lastUsedColumNumber = sheet.LastColumnUsed() == null ? 0 : sheet.LastColumnUsed().ColumnNumber();
+
+                    logger.ZLogInformation($"シート名:{sheet.Name}, 最後の行:{lastUsedRowNumber}, 最後の列:{lastUsedColumNumber}");
+
+                    for (int r = 1; r < lastUsedRowNumber + 1; r++)
+                    {
+                        IXLCell cellConnect = sheet.Cell(r, deviceFromConnectColumn);
+                        IXLCell cellCableID = sheet.Cell(r, deviceFromCableIdColumn);
+                        if (cellConnect.IsEmpty() == true)
+                        {
+                            // nothing
+                        }
+                        else
+                        {
+                            if (cellConnect.Value.GetText() == wordConnect || cellConnect.Value.GetText() == wordDisconnect)
+                            {
+                                MyDevicePort tmpDevicePort = new MyDevicePort();
+                                tmpDevicePort.fromConnect = cellConnect.Value.GetText();
+                                int id = -1;
+                                switch (cellCableID.DataType)
+                                {
+                                    case XLDataType.Number:
+                                        id = cellCableID.GetValue<int>();
+                                        break;
+                                    case XLDataType.Text:
+                                        try
+                                        {
+                                            id = int.Parse(cellCableID.GetValue<string>());
+                                        }
+                                        catch (System.FormatException)
+                                        {
+                                            logger.ZLogWarning($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                                            continue;
+                                        }
+                                        catch (System.Exception)
+                                        {
+                                            throw;
+                                        }
+                                        break;
+                                    default:
+                                        logger.ZLogWarning($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
+                                        continue;
+                                }
+                                tmpDevicePort.fromCableID = id;
+                                tmpDevicePort.fromKeyPortName = sheet.Cell(r, deviceFromKeyPortNameColumn).Value.ToString();
+                                tmpDevicePort.fromFloorName = sheet.Cell(r, deviceFromFloorNameColumn).Value.ToString();
+                                tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
+                                tmpDevicePort.fromDeviceNumber = sheet.Cell(r, deviceFromDeviceNumberColumn).Value.ToString();
+                                tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
+                                tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
+                                tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
+                                tmpDevicePort.fromConnectorName = sheet.Cell(r, deviceFromConnectorNameColumn).Value.ToString();
+                                tmpDevicePort.toFloorName = sheet.Cell(r, deviceToFloorNameColumn).Value.ToString();
+                                tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
+                                tmpDevicePort.toDeviceNumber = sheet.Cell(r, deviceToDeviceNumberColumn).Value.ToString();
+                                tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
+                                tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
+                                tmpDevicePort.toPortName = sheet.Cell(r, deviceToPortNameColumn).Value.ToString();
+                                MyDevicePorts.Add(tmpDevicePort);
+                            }
+                        }
+                    }
+                }
+            }
+
+//== print
+            printMyHostNameUsedPorts();
+            printMyDevicePorts();
+
+//== check RosetteVsSiteNmber
+            string siteNumber = getSiteNuberString(excelpath);
+            checkRosetteVsSiteNmber(siteNumber);
+
+        }
+        catch (IOException ie)
+        {
+            logger.ZLogError($"[ERROR] Excelファイルの読み取りでエラーが発生しました。Excelで対象ファイルを開いていませんか？ 詳細:({ie.Message})");
+            return;
+        }
+        catch (System.Exception)
+        {
+            throw;
+        }
+
+//== finish
+        if (isAllPass)
+        {
+            logger.ZLogInformation($"== [Congratulations!] すべての項目をパスしました ==");
+        }
+        else
+        {
+            logger.ZLogError($"== [ERROR] [NG]箇所があります 対処してください ==");
+        }
+        logger.ZLogInformation($"==== tool finish ====");
+
+    }
+
+    string getSiteNuberString(string excelpath)
+    {
+        string fileNamePrifex = config.Value.FileNamePrifex;
+        string fileNameWord = config.Value.FileNameWord;
+        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(excelpath);
+        string replacePrifex = fileNameWithoutExtension.Replace(fileNamePrifex, "");
+        int position = replacePrifex.IndexOf(fileNameWord);
+        string substring = replacePrifex.Substring(0, position);
+        return substring;
+    }
+
+    void checkRosetteVsSiteNmber(string siteNumber)
+    {
+        logger.ZLogInformation($"== start ローゼット名と拠点番号の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicDeviceName = new Dictionary<string, string>();
+        string deviceNameToRosette = config.Value.DeviceNameToRosette;
+        foreach (var device in deviceNameToRosette.Split(','))
+        {
+            dicDeviceName.Add(device, "");
+        }
+
+        string wordConnect = config.Value.WordConnect;
+        Dictionary<string,int> dicRosetteName = new Dictionary<string, int>();
+        foreach (var device in MyDevicePorts)
+        {
+            if (device.fromConnect == wordConnect)
+            {
+                if (isDevice(device.toDeviceName, dicDeviceName))
+                {
+                    try
+                    {
+                        dicRosetteName.Add(device.toHostName, device.fromCableID);
+                        if (!device.toHostName.Contains(siteNumber))
+                        {
+                            isError = true;
+                            logger.ZLogError($"エラー ローゼット名に拠点番号({siteNumber})が含まれていません({device.toHostName}) ケーブルID:{device.fromCableID}");
+                        }
+                        else
+                        {
+                            logger.ZLogTrace($"[checkRosetteVsSiteNmber] 対象外としました ローゼット名に拠点番号({siteNumber})が含まれています({device.toHostName}) ケーブルID:{device.fromCableID}");
+                        }
+                    }
+                    catch (System.ArgumentException)
+                    {
+                        logger.ZLogError($"エラー ローゼット名が重複して記載されています({device.toHostName}) 初回の出現ケーブルID:{dicRosetteName[device.toHostName]} 重複回の出現ケーブルID:{device.fromCableID}");
+                    }
+                    catch (System.Exception)
+                    {
+                        throw;
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkRosetteVsSiteNmber] 対象外としました ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName}");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ローゼット名に拠点番号が含まれていない箇所が発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ローゼット名に拠点番号が含まれています");
+        }
+        logger.ZLogInformation($"== end ローゼット名と拠点番号の確認 ==");
+    }
+
+
+//    [Command("")]
     public void Check(string diagram, string excelpath, string prefix, int devicelength, int rosettelength)
     {
 //== start
@@ -1201,6 +1422,8 @@ public class MyConfig
     public string IgnoreConnectorNameToAll {get; set;} = "";
     public string WordDeviceToHostNameList {get; set;} = "";
     public string DeviceNameToRosette {get; set;} = "";
+    public string FileNamePrifex {get; set;} = "";
+    public string FileNameWord {get; set;} = "";
 }
 
 public class MyDevicePort
