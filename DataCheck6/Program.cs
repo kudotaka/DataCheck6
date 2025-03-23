@@ -504,6 +504,10 @@ public class DataCheckApp : ConsoleAppBase
 //== check rosette
             checkRosette();
 
+//== check RosetteVsSiteNmber
+            string siteNumber = getSiteNuberString(excelpath);
+            checkRosetteVsSiteNmber(siteNumber);
+
 //== check 
             checkConnectXConnect();
         }
