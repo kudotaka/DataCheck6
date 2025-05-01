@@ -69,10 +69,259 @@ public class DataCheckApp : ConsoleAppBase
 
     List<MyDevicePort> MyDevicePorts = new List<MyDevicePort>();
 
+    Dictionary<string, MyUsedRouter> MyUsedRouters = new Dictionary<string, MyUsedRouter>();
+
     public DataCheckApp(ILogger<DataCheckApp> logger,IOptions<MyConfig> config)
     {
         this.logger = logger;
         this.config = config;
+    }
+
+//    [Command("")]
+    public void Router(string folderpath)
+    {
+//== start
+        logger.ZLogInformation($"==== tool Router {getMyFileVersion()} ====");
+        
+        if (!Directory.Exists(folderpath))
+        {
+            logger.ZLogError($"[NG] target folder is missing.");
+            return;
+        }
+
+        try
+        {
+            var excelpaths = Directory.GetFiles(folderpath);
+            foreach (var excelpath in excelpaths)
+            {
+                List<MyDevicePort> mydeviceports = new List<MyDevicePort>();
+                CreateFileToList(excelpath, mydeviceports);
+                CheckRouter(excelpath, mydeviceports);
+                mydeviceports.Clear();
+            }
+        }
+        catch (System.Exception)
+        {
+            
+            throw;
+        }
+
+
+//== finish
+        ExportFile();
+        logger.ZLogInformation($"==== tool finish ====");
+
+    }
+
+    private void CheckRouter(string excelpath, List<MyDevicePort> mydeviceports)
+    {
+        string sieName = getSiteNameString(excelpath);
+        string routerModelName = config.Value.RouterModelName;
+        string routerModelPortName = config.Value.RouterModelPortName;
+        var tmpRouter = new MyUsedRouter();
+        tmpRouter.siteNumberName = sieName;
+
+        List<MyEnumRouter> listEnum = new List<MyEnumRouter>();
+        string wordConnect = config.Value.WordConnect;
+        foreach (var device in mydeviceports)
+        {
+            if (device.fromModelName.Contains(routerModelName))
+            {
+                if (device.fromPortName.Contains(routerModelPortName))
+                {
+                    if (device.fromConnect == wordConnect)
+                    {
+                        listEnum.Add(MyEnumRouter.Used);
+                    }
+                    else
+                    {
+                        listEnum.Add(MyEnumRouter.Corrected);
+                    }
+                }
+                else
+                {
+                    // ??
+                    listEnum.Add(MyEnumRouter.CheckMe);
+                }
+            }
+            else
+            {
+                listEnum.Add(MyEnumRouter.NotModel);
+            }
+        }
+
+        tmpRouter.usedRouer = listEnum.Min();
+
+        MyUsedRouters.Add(sieName, tmpRouter);
+        listEnum.Clear();
+    }
+    private void ExportFile()
+    {
+        logger.ZLogInformation($"== 結果の出力 ==");
+        string exportfilepath = getExportFileName();
+        var sortKeys = MyUsedRouters.Keys.ToList();
+        sortKeys.Sort();
+        try
+        {
+            using (StreamWriter file = new StreamWriter(exportfilepath, false, Encoding.GetEncoding("utf-8"))) {
+                foreach (var key in sortKeys) {
+                    var line = MyUsedRouters[key].siteNumberName + "," + MyUsedRouters[key].usedRouer;
+                    file.WriteLine(line);
+                    logger.ZLogInformation($"SiteName:{MyUsedRouters[key].siteNumberName},enum:{MyUsedRouters[key].usedRouer}");
+                }
+            }
+        }
+        catch (System.Exception)
+        {
+            
+            throw;
+        }
+    }
+
+    private string getExportFileName()
+    {
+        string exportFolderPath = config.Value.RouterExportFolderPath;
+        string exportFilename = DateTime.Now.ToString("yyyyMMdd")+".txt";
+        return Path.Join(exportFolderPath, exportFilename);
+    }
+    private string getSiteNameString(string excelpath)
+    {
+        string fileNamePrifex = config.Value.FileNamePrifex;
+        string fileNameWord = config.Value.FileNameWord;
+        string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(excelpath);
+        string replacePrifex = fileNameWithoutExtension.Replace(fileNamePrifex, "");
+        int position1 = replacePrifex.IndexOf(fileNameWord);
+        int position2 = replacePrifex.IndexOf(fileNameWord, position1+1);
+        if (position2 < 0)
+        {
+            return replacePrifex;
+        }
+        string substring = replacePrifex.Substring(0, position2);
+        return substring;
+    }
+
+    private void CreateFileToList(string excelpath, List<MyDevicePort> mydeviceports)
+    {
+        try
+        {
+            using FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using XLWorkbook xlWorkbook = new XLWorkbook(fs);
+            IXLWorksheets sheets = xlWorkbook.Worksheets;
+
+//== init
+            int deviceFromCableIdColumn = config.Value.DeviceFromCableIdColumn;
+            int deviceFromKeyPortNameColumn = config.Value.DeviceFromKeyPortNameColumn;
+            int deviceFromConnectColumn = config.Value.DeviceFromConnectColumn;
+            int deviceFromFloorNameColumn = config.Value.DeviceFromFloorNameColumn;
+            int deviceFromDeviceNameColumn = config.Value.DeviceFromDeviceNameColumn;
+            int deviceFromDeviceNumberColumn = config.Value.DeviceFromDeviceNumberColumn;
+            int deviceFromHostNameColumn = config.Value.DeviceFromHostNameColumn;
+            int deviceFromModelNameColumn = config.Value.DeviceFromModelNameColumn;
+            int deviceFromPortNameColumn = config.Value.DeviceFromPortNameColumn;
+            int deviceFromConnectorNameColumn = config.Value.DeviceFromConnectorNameColumn;
+            int deviceToFloorNameColumn = config.Value.DeviceToFloorNameColumn;
+            int deviceToDeviceNameColumn = config.Value.DeviceToDeviceNameColumn;
+            int deviceToDeviceNumberColumn = config.Value.DeviceToDeviceNumberColumn;
+            int deviceToModelNameColumn = config.Value.DeviceToModelNameColumn;
+            int deviceToHostNameColumn = config.Value.DeviceToHostNameColumn;
+            int deviceToPortNameColumn = config.Value.DeviceToPortNameColumn;
+            string wordConnect = config.Value.WordConnect;
+            string wordDisconnect = config.Value.WordDisconnect;
+            string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
+            string ignoreDeviceNameToHostNamePrefix = config.Value.IgnoreDeviceNameToHostNamePrefix;
+            string ignoreDeviceNameToConnectXConnect = config.Value.IgnoreDeviceNameToConnectXConnect;
+            string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+            string wordDeviceToHostNameList = config.Value.WordDeviceToHostNameList;
+            string deviceNameToRosette = config.Value.DeviceNameToRosette;
+
+            logger.ZLogInformation($"== パラメーター ==");
+            logger.ZLogInformation($"Checkファイル名:{excelpath}");
+
+            foreach (IXLWorksheet? sheet in sheets)
+            {
+                if (sheet != null)
+                {
+                    int lastUsedRowNumber = sheet.LastRowUsed() == null ? 0 : sheet.LastRowUsed().RowNumber();
+                    int lastUsedColumNumber = sheet.LastColumnUsed() == null ? 0 : sheet.LastColumnUsed().ColumnNumber();
+
+//                    logger.ZLogInformation($"シート名:{sheet.Name}, 最後の行:{lastUsedRowNumber}, 最後の列:{lastUsedColumNumber}");
+
+                    for (int r = 1; r < lastUsedRowNumber + 1; r++)
+                    {
+                        IXLCell cellConnect = sheet.Cell(r, deviceFromConnectColumn);
+                        IXLCell cellCableID = sheet.Cell(r, deviceFromCableIdColumn);
+                        if (cellConnect.IsEmpty() == true)
+                        {
+                            // nothing
+                        }
+                        else
+                        {
+                            if (cellConnect.Value.GetText() == wordConnect || cellConnect.Value.GetText() == wordDisconnect)
+                            {
+                                MyDevicePort tmpDevicePort = new MyDevicePort();
+                                tmpDevicePort.fromConnect = cellConnect.Value.GetText();
+                                int id = -1;
+                                switch (cellCableID.DataType)
+                                {
+                                    case XLDataType.Number:
+                                        id = cellCableID.GetValue<int>();
+                                        break;
+                                    case XLDataType.Text:
+                                        try
+                                        {
+                                            id = int.Parse(cellCableID.GetValue<string>());
+                                        }
+                                        catch (System.FormatException)
+                                        {
+                                            logger.ZLogWarning($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                                            continue;
+                                        }
+                                        catch (System.Exception)
+                                        {
+                                            throw;
+                                        }
+                                        break;
+                                    default:
+                                        logger.ZLogWarning($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
+                                        continue;
+                                }
+                                tmpDevicePort.fromCableID = id;
+                                tmpDevicePort.fromKeyPortName = sheet.Cell(r, deviceFromKeyPortNameColumn).Value.ToString();
+                                tmpDevicePort.fromFloorName = sheet.Cell(r, deviceFromFloorNameColumn).Value.ToString();
+                                tmpDevicePort.fromDeviceName = sheet.Cell(r, deviceFromDeviceNameColumn).Value.ToString();
+                                tmpDevicePort.fromDeviceNumber = sheet.Cell(r, deviceFromDeviceNumberColumn).Value.ToString();
+                                tmpDevicePort.fromHostName = sheet.Cell(r, deviceFromHostNameColumn).Value.ToString();
+                                tmpDevicePort.fromModelName = sheet.Cell(r, deviceFromModelNameColumn).Value.ToString();
+                                tmpDevicePort.fromPortName = sheet.Cell(r, deviceFromPortNameColumn).Value.ToString();
+                                tmpDevicePort.fromConnectorName = sheet.Cell(r, deviceFromConnectorNameColumn).Value.ToString();
+                                tmpDevicePort.toFloorName = sheet.Cell(r, deviceToFloorNameColumn).Value.ToString();
+                                tmpDevicePort.toDeviceName = sheet.Cell(r, deviceToDeviceNameColumn).Value.ToString();
+                                tmpDevicePort.toDeviceNumber = sheet.Cell(r, deviceToDeviceNumberColumn).Value.ToString();
+                                tmpDevicePort.toModelName = sheet.Cell(r, deviceToModelNameColumn).Value.ToString();
+                                tmpDevicePort.toHostName = sheet.Cell(r, deviceToHostNameColumn).Value.ToString();
+                                tmpDevicePort.toPortName = sheet.Cell(r, deviceToPortNameColumn).Value.ToString();
+                                mydeviceports.Add(tmpDevicePort);
+                            }
+                        }
+                    }
+                }
+            }
+
+//== print
+            printMyDevicePorts(mydeviceports);
+
+
+        }
+        catch (IOException ie)
+        {
+            logger.ZLogError($"[ERROR] Excelファイルの読み取りでエラーが発生しました。Excelで対象ファイルを開いていませんか？ 詳細:({ie.Message})");
+            return;
+        }
+        catch (System.Exception)
+        {
+            throw;
+        }
+
     }
 
 //    [Command("")]
@@ -681,6 +930,15 @@ public class DataCheckApp : ConsoleAppBase
         }
         logger.ZLogTrace($"== end print ==");
     }
+    private void printMyHostNameUsedPorts(Dictionary<string, List<string>> myhostnameusedports)
+    {
+        logger.ZLogTrace($"== start print ==");
+        foreach (var hostname in myhostnameusedports.Keys)
+        {
+            logger.ZLogTrace($"ホスト名:{hostname},使用済ポート:{string.Join(";",myhostnameusedports[hostname])}");
+        }
+        logger.ZLogTrace($"== end print ==");
+    }
 
     private void printMyDevicePorts()
     {
@@ -688,6 +946,15 @@ public class DataCheckApp : ConsoleAppBase
         foreach (var device in MyDevicePorts)
         {
             logger.ZLogTrace($"CableID:{device.fromCableID},connect:{device.fromConnect},(from) Device:{device.fromDeviceName},Host:{device.fromHostName},Model:{device.toModelName},Port:{device.fromPortName},(to) Device:{device.toDeviceName},Host:{device.toHostName},Model:{device.toModelName},Port:{device.toPortName}");
+        }
+        logger.ZLogTrace($"== end print ==");
+    }
+    private void printMyDevicePorts(List<MyDevicePort> mydeviceports)
+    {
+        logger.ZLogTrace($"== start print ==");
+        foreach (var device in mydeviceports)
+        {
+            logger.ZLogTrace($"CableID:{device.fromCableID},connect:{device.fromConnect},(from) Device:{device.fromDeviceName},Host:{device.fromHostName},Model:{device.fromModelName},Port:{device.fromPortName},(to) Device:{device.toDeviceName},Host:{device.toHostName},Model:{device.toModelName},Port:{device.toPortName}");
         }
         logger.ZLogTrace($"== end print ==");
     }
@@ -1428,6 +1695,10 @@ public class MyConfig
     public string DeviceNameToRosette {get; set;} = "";
     public string FileNamePrifex {get; set;} = "";
     public string FileNameWord {get; set;} = "";
+
+    public string RouterModelName {get; set;} = "";
+    public string RouterModelPortName {get; set;} = "";
+    public string RouterExportFolderPath {get; set;} = "";
 }
 
 public class MyDevicePort
@@ -1450,4 +1721,19 @@ public class MyDevicePort
     public string toModelName = "";
     public string toHostName = "";
     public string toPortName = "";
+}
+
+public enum MyEnumRouter
+{
+    Used = 0,
+    Corrected = 1,
+    CheckMe = 2,
+    NotModel = 8,
+    Unknown = 32,
+}
+
+public class MyUsedRouter
+{
+    public string siteNumberName = "";
+    public MyEnumRouter usedRouer = MyEnumRouter.Unknown;
 }
