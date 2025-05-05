@@ -78,7 +78,7 @@ public class DataCheckApp : ConsoleAppBase
     }
 
 //    [Command("")]
-    public void Router(string folderpath)
+    public void Router(string folderpath, string outfilepath)
     {
 //== start
         logger.ZLogInformation($"==== tool Router {getMyFileVersion()} ====");
@@ -102,15 +102,12 @@ public class DataCheckApp : ConsoleAppBase
         }
         catch (System.Exception)
         {
-            
             throw;
         }
 
-
 //== finish
-        ExportFile();
+        ExportFile(outfilepath);
         logger.ZLogInformation($"==== tool finish ====");
-
     }
 
     private void CheckRouter(string excelpath, List<MyDevicePort> mydeviceports)
@@ -155,10 +152,10 @@ public class DataCheckApp : ConsoleAppBase
         MyUsedRouters.Add(sieName, tmpRouter);
         listEnum.Clear();
     }
-    private void ExportFile()
+    private void ExportFile(string outfilepath)
     {
         logger.ZLogInformation($"== 結果の出力 ==");
-        string exportfilepath = getExportFileName();
+        string exportfilepath = getExportFileName(outfilepath);
         var sortKeys = MyUsedRouters.Keys.ToList();
         sortKeys.Sort();
         try
@@ -178,9 +175,9 @@ public class DataCheckApp : ConsoleAppBase
         }
     }
 
-    private string getExportFileName()
+    private string getExportFileName(string outfilepath)
     {
-        string exportFolderPath = config.Value.RouterExportFolderPath;
+        string exportFolderPath = outfilepath;
         string exportFilename = DateTime.Now.ToString("yyyyMMdd")+".txt";
         return Path.Join(exportFolderPath, exportFilename);
     }
@@ -1698,7 +1695,6 @@ public class MyConfig
 
     public string RouterModelName {get; set;} = "";
     public string RouterModelPortName {get; set;} = "";
-    public string RouterExportFolderPath {get; set;} = "";
 }
 
 public class MyDevicePort
