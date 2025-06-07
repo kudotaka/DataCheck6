@@ -77,6 +77,81 @@ public class DataCheckApp : ConsoleAppBase
         this.config = config;
     }
 
+
+//    [Command("")]
+    public void Instruction(string excelpath, string startword)
+    {
+//== start
+        logger.ZLogInformation($"==== tool Instruction {getMyFileVersion()} ====");
+        
+        if (!File.Exists(excelpath))
+        {
+            logger.ZLogError($"[NG] target excel file is missing.");
+            return;
+        }
+
+        string instructionSheetName = config.Value.InstructionSheetName;
+        string instructionCheck1Prifex = config.Value.InstructionCheck1Prifex; 
+        string instructionCheck1Cell = config.Value.InstructionCheck1Cell;
+        StringBuilder sbStartword = new StringBuilder();
+        sbStartword.Append(instructionCheck1Prifex);
+        sbStartword.Append(startword);
+        string excelWord = "";
+        try
+        {
+            using FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using XLWorkbook xlWorkbook = new XLWorkbook(fs);
+            IXLWorksheets sheets = xlWorkbook.Worksheets;
+            foreach (IXLWorksheet? sheet in sheets)
+            {
+                if (sheet != null && string.Equals(sheet.Name, instructionSheetName))
+                {
+                    IXLCell cellConnect = sheet.Cell(instructionCheck1Cell);
+                    excelWord = cellConnect.Value.ToString();
+                    logger.ZLogInformation($"{instructionCheck1Cell} = {excelWord}");
+                }
+            }
+        }
+        catch (IOException ie)
+        {
+            logger.ZLogError($"[ERROR] Excelファイルの読み取りでエラーが発生しました。Excelで対象ファイルを開いていませんか？ 詳細:({ie.Message})");
+            return;
+        }
+        catch (System.Exception)
+        {
+            throw;
+        }
+
+        checkInstruction1(excelWord, sbStartword.ToString());
+
+//== finish
+        if (isAllPass)
+        {
+            logger.ZLogInformation($"== [Congratulations!] すべての項目をパスしました ==");
+        }
+        else
+        {
+            logger.ZLogError($"== [ERROR] [NG]箇所があります 対処してください ==");
+        }
+        logger.ZLogInformation($"==== tool finish ====");
+    }
+    void checkInstruction1(string excelword, string startword)
+    {
+        logger.ZLogInformation($"== start 申し送り項目の確認 ==");
+        logger.ZLogInformation($"excelword:{excelword}, startword:{startword}");
+//        if (!startword.StartsWith(excelword))
+        if (!excelword.StartsWith(startword))
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] 申し送り項目の開始文字列が一致していない可能性があり、チェックしてください");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] 申し送り項目の開始文字列が一致しています");
+        }
+        logger.ZLogInformation($"== end 申し送り項目の確認 ==");
+    }
+
 //    [Command("")]
     public void Router(string folderpath, string outfilepath)
     {
@@ -1695,6 +1770,10 @@ public class MyConfig
 
     public string RouterModelName {get; set;} = "";
     public string RouterModelPortName {get; set;} = "";
+
+    public string InstructionSheetName {get; set;} = "";
+    public string InstructionCheck1Prifex {get; set;} = "";
+    public string InstructionCheck1Cell {get; set;} = "";
 }
 
 public class MyDevicePort
