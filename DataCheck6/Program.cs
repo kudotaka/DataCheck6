@@ -99,6 +99,8 @@ public class DataCheckApp : ConsoleAppBase
         string excelWord = "";
         try
         {
+            logger.ZLogInformation($"== パラメーター ==");
+            logger.ZLogInformation($"Checkファイル名:{excelpath}");
             using FileStream fs = new FileStream(excelpath, FileMode.Open, FileAccess.Read, FileShare.Read);
             using XLWorkbook xlWorkbook = new XLWorkbook(fs);
             IXLWorksheets sheets = xlWorkbook.Worksheets;
@@ -108,7 +110,6 @@ public class DataCheckApp : ConsoleAppBase
                 {
                     IXLCell cellConnect = sheet.Cell(instructionCheck1Cell);
                     excelWord = cellConnect.Value.ToString();
-                    logger.ZLogInformation($"{instructionCheck1Cell} = {excelWord}");
                 }
             }
         }
@@ -139,7 +140,6 @@ public class DataCheckApp : ConsoleAppBase
     {
         logger.ZLogInformation($"== start 申し送り項目の確認 ==");
         logger.ZLogInformation($"excelword:{excelword}, startword:{startword}");
-//        if (!startword.StartsWith(excelword))
         if (!excelword.StartsWith(startword))
         {
             isAllPass = false;
