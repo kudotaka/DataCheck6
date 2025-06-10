@@ -795,6 +795,9 @@ public class DataCheckApp : ConsoleAppBase
             printMyHostNameUsedPorts();
             printMyDevicePorts();
 
+//== check HostName suffix
+            checkHostNameSuffix();
+
 //== check CableList KeyPortName vs PortName
             checkKeyPortNameAndPortName();
 
@@ -888,6 +891,116 @@ public class DataCheckApp : ConsoleAppBase
         }
 
         logger.ZLogTrace($"== end readModeAndPortName ==");
+    }
+
+    private void checkHostNameSuffix()
+    {
+        logger.ZLogInformation($"== start ホスト名の接尾語の確認 ==");
+        bool isError = false;
+        Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
+        string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
+        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
+        foreach (var ignore in ignoreDeviceNameToHostNameLength.Split(','))
+        {
+            dicIgnoreDeviceName.Add(ignore, "");
+        }
+        foreach (var ignore in ignoreConnectorNameToAll.Split(','))
+        {
+            dicIgnoreConnectorName.Add(ignore, "");
+        }
+
+        string wordConnect = config.Value.WordConnect;
+        foreach (var device in MyDevicePorts)
+        {
+            if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
+            {
+                string lastTwoCharsFrom = device.fromHostName.Substring(device.fromHostName.Length - 2);
+                if (int.TryParse(lastTwoCharsFrom, out int tempIntFrom) == false)
+                {
+/*
+                    if (tempIntFrom >= 1 && tempIntFrom <= 99)
+                    {
+                        logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側コネクター形状:{device.fromConnectorName}");
+                    }
+                    else
+                    {
+                        isError = true;
+                        logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側ホスト名:{device.fromHostName}");
+                    }
+*/
+                    isError = true;
+                    logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID}  From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                }
+                else
+                {
+                    if (tempIntFrom >= 1 && tempIntFrom <= 99)
+                    {
+                        logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                    }
+                    else
+                    {
+                        isError = true;
+                        logger.ZLogError($"変換エラー 範囲(01～99) ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                    }
+                }
+            }
+            else
+            {
+                logger.ZLogTrace($"[checkHostNameSuffix] 除外しました ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側コネクター形状:{device.fromConnectorName}");
+            }
+
+            if (device.fromConnect == wordConnect)
+            {
+                if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
+                {
+                    string lastTwoCharsTo = device.toHostName.Substring(device.toHostName.Length - 2);
+                    if (int.TryParse(lastTwoCharsTo, out int tempIntTo) == false)
+                    {
+/*
+                        if (tempIntTo >= 1 && tempIntTo <= 99)
+                        {
+                            logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
+                        }
+                        else
+                        {
+                            isError = true;
+                            logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} To側ホスト名:{device.toHostName}");
+                        }
+*/
+                        isError = true;
+                        logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName} To側デバイス名:{device.toDeviceName}");
+                    }
+                    else
+                    {
+                        if (tempIntTo >= 1 && tempIntTo <= 99)
+                        {
+                            logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName} To側デバイス名:{device.toDeviceName}");
+                        }
+                        else
+                        {
+                            isError = true;
+                            logger.ZLogError($"変換エラー 範囲(01～99) ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName}");
+                        }
+                    }
+                }
+                else
+                {
+                    logger.ZLogTrace($"[checkHostNameSuffix] 除外しました ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName} To側デバイス名:{device.toDeviceName}");
+                }
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] ホスト名の接尾語が範囲(01～99)ではないことが発見されました");
+        }
+        else
+        {
+            logger.ZLogInformation($"[OK] ホスト名の接尾語が範囲(01～99)であることが確認されました");
+        }
+        logger.ZLogInformation($"== end ホスト名の接尾語の確認 ==");
     }
 
     private void checkKeyPortNameAndPortName()
