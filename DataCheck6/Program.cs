@@ -70,8 +70,10 @@ public class DataCheckApp : ConsoleAppBase
     List<MyDevicePort> MyDevicePorts = new List<MyDevicePort>();
 
     Dictionary<string, MyUsedRouter> MyUsedRouters = new Dictionary<string, MyUsedRouter>();
+    
+    Dictionary<string, List<string>> MyMultipleConnections = new Dictionary<string, List<string>>();
 
-    public DataCheckApp(ILogger<DataCheckApp> logger,IOptions<MyConfig> config)
+    public DataCheckApp(ILogger<DataCheckApp> logger, IOptions<MyConfig> config)
     {
         this.logger = logger;
         this.config = config;
@@ -834,6 +836,10 @@ public class DataCheckApp : ConsoleAppBase
 
 //== check 
             checkConnectXConnect();
+
+//== info 
+            infoMultipleConnections();
+
         }
         catch (IOException ie)
         {
@@ -1729,6 +1735,7 @@ public class DataCheckApp : ConsoleAppBase
                     try
                     {
                         connectxconnect.Add(device.fromHostName + "&" + device.fromPortName, device.toHostName + "&" + device.toPortName);
+                        putMultipleConnections(device.fromHostName, device.fromPortName, device.toHostName, device.toPortName);
                     }
                     catch (System.ArgumentException)
                     {
@@ -1765,6 +1772,11 @@ public class DataCheckApp : ConsoleAppBase
                 }
                 else
                 {
+                    if (string.Compare(toValue, fromValue) == 0)
+                    {
+                        isError = true;
+                        logger.ZLogError($"エラー ヒント情報:FromとToの値({toValue})が同一です");
+                    }
                     logger.ZLogTrace($"[checkConnectXConnect] チェック通過 From({key})");
                 }
             }
@@ -1779,6 +1791,98 @@ public class DataCheckApp : ConsoleAppBase
             logger.ZLogInformation($"[OK] 接続される装置間の接続ポートの不一致はありませんでした");
         }
         logger.ZLogInformation($"== end 接続される装置間の接続ポートの確認 ==");
+    }
+
+    void putMultipleConnections(string fromHostName, string fromPortName, string toHostName, string toPortName)
+    {
+        string tmpKey = "";
+        string tmpValue = "";
+        switch (string.Compare(fromHostName, toHostName))
+        {
+            case -1:
+                tmpKey = fromHostName + "_" + toHostName;
+                tmpValue = fromHostName + "_" + fromPortName + "->" + toHostName + "_" + toPortName;
+                break;
+            case 0:
+                tmpKey = fromHostName + "_" + toHostName;
+                tmpValue = fromHostName + "_" + fromPortName + "->" + toHostName + "_" + toPortName;
+                break;
+            case 1:
+                tmpKey = toHostName + "_" + fromHostName;
+                tmpValue = toHostName + "_" + toPortName + "->" + fromHostName + "_" + fromPortName;
+                break;
+            default:
+                new Exception("Error putMultipleConnections()");
+                break;
+        }
+        if (MyMultipleConnections.ContainsKey(tmpKey))
+        {
+            if (!MyMultipleConnections[tmpKey].Contains(tmpValue))
+            {
+                MyMultipleConnections[tmpKey].Add(tmpValue);
+            }
+        }
+        else
+        {
+            var tmpList = new List<string>();
+            tmpList.Add(tmpValue);
+            MyMultipleConnections[tmpKey] = tmpList;
+        }
+    }
+
+    void infoMultipleConnections()
+    {
+        if (isAllPass == false)
+        {
+            return;
+        }
+        logger.ZLogInformation($"== start A装置->B装置へ2本以上の接続の確認 ==");
+        bool isMultipleConnections = false;
+        bool isError = false;
+        foreach (var key in MyMultipleConnections.Keys)
+        {
+            var listValue = MyMultipleConnections[key];
+            if (listValue.Count < 2)
+            {
+                continue;
+            }
+            isMultipleConnections = true;
+            for (int i = 0; i < listValue.Count; i++)
+            {
+                logger.ZLogInformation($"[接続{i + 1}] {listValue[i]}");
+            }
+
+            logger.ZLogInformation($"A装置->B装置へ2本以上の接続があると自動で判定できません");
+            logger.ZLogInformation($"上記は正しいですか？正しい場合は[Y]キー 正しくない場合は[Y以外]のキー を入力してください");
+            ConsoleKeyInfo keyInfo = Console.ReadKey();
+            if (keyInfo.Key == ConsoleKey.Y)
+            {
+                logger.ZLogInformation($"[Y]キーが入力されました");
+            }
+            else
+            {
+                isError = true;
+                logger.ZLogInformation($"[NG] [Y以外]のキーでした 資料を修正してください");
+            }
+        }
+
+        if (isError)
+        {
+            isAllPass = false;
+            logger.ZLogInformation($"[NG] A装置->B装置へ2本以上の接続に問題が発見が発見されました");
+        }
+        else
+        {
+            if (isMultipleConnections)
+            {
+                logger.ZLogInformation($"[OK] A装置->B装置へ2本以上の接続に問題はありませんでした");
+            }
+            else
+            {
+                logger.ZLogInformation($"[OK] A装置->B装置へ2本以上の接続が存在せず、問題ありませんでした");
+            }
+        }
+        logger.ZLogInformation($"== end A装置->B装置へ2本以上の接続の確認 ==");
     }
 
     void checkRosette()
