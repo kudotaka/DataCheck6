@@ -756,7 +756,8 @@ public class DataCheckApp : ConsoleAppBase
                                         }
                                         catch (System.FormatException)
                                         {
-                                            logger.ZLogWarning($"ID is NOT type ( Text-> parse ) at sheet:{sheet.Name} row:{r}");
+                                            isAllPass = false;
+                                            logger.ZLogError($"[NG]ケーブルID is Error ( Text-> Int) at sheet:{sheet.Name} row:{r}");
                                             continue;
                                         }
                                         catch (System.Exception)
@@ -765,7 +766,8 @@ public class DataCheckApp : ConsoleAppBase
                                         }
                                         break;
                                     default:
-                                        logger.ZLogWarning($"ID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
+                                        isAllPass = false;
+                                        logger.ZLogError($"[NG]ケーブルID is NOT type ( Number | Text ) at sheet:{sheet.Name} row:{r}");
                                         continue;
                                 }
                                 tmpDevicePort.fromCableID = id;
@@ -903,9 +905,9 @@ public class DataCheckApp : ConsoleAppBase
     {
         logger.ZLogInformation($"== start ホスト名の接尾語の確認 ==");
         bool isError = false;
-        Dictionary<string,string> dicIgnoreDeviceName = new Dictionary<string, string>();
+        Dictionary<string, string> dicIgnoreDeviceName = new Dictionary<string, string>();
         string ignoreDeviceNameToHostNameLength = config.Value.IgnoreDeviceNameToHostNameLength;
-        Dictionary<string,string> dicIgnoreConnectorName = new Dictionary<string, string>();
+        Dictionary<string, string> dicIgnoreConnectorName = new Dictionary<string, string>();
         string ignoreConnectorNameToAll = config.Value.IgnoreConnectorNameToAll;
         foreach (var ignore in ignoreDeviceNameToHostNameLength.Split(','))
         {
@@ -921,22 +923,27 @@ public class DataCheckApp : ConsoleAppBase
         {
             if (isNotIgnoreDevice(device.fromDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
             {
-                string lastTwoCharsFrom = device.fromHostName.Substring(device.fromHostName.Length - 2);
+                if (device.fromHostName.Length < 3)
+                {
+                    logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                    isError = true;
+                    continue;
+                }
+                string lastTwoCharsFrom = string.Empty;
+                try
+                {
+                    lastTwoCharsFrom = device.fromHostName.Substring(device.fromHostName.Length - 2);
+                }
+                catch (System.Exception)
+                {
+                    logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                    isError = true;
+                    continue;
+                }
                 if (int.TryParse(lastTwoCharsFrom, out int tempIntFrom) == false)
                 {
-/*
-                    if (tempIntFrom >= 1 && tempIntFrom <= 99)
-                    {
-                        logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側コネクター形状:{device.fromConnectorName}");
-                    }
-                    else
-                    {
-                        isError = true;
-                        logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} From側デバイス名:{device.fromDeviceName} From側ホスト名:{device.fromHostName}");
-                    }
-*/
                     isError = true;
-                    logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID}  From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
+                    logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} From側ホスト名:{device.fromHostName} From側デバイス名:{device.fromDeviceName}");
                 }
                 else
                 {
@@ -960,20 +967,19 @@ public class DataCheckApp : ConsoleAppBase
             {
                 if (isNotIgnoreDevice(device.toDeviceName, dicIgnoreDeviceName) && isNotIgnoreDevice(device.fromConnectorName, dicIgnoreConnectorName))
                 {
-                    string lastTwoCharsTo = device.toHostName.Substring(device.toHostName.Length - 2);
+                    string lastTwoCharsTo = string.Empty;
+                    try
+                    {
+                        lastTwoCharsTo = device.toHostName.Substring(device.toHostName.Length - 2);
+                    }
+                    catch (System.Exception)
+                    {
+                        logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID}のTo側ホスト名を確認してください");
+                        isError = true;
+                        continue;
+                    }
                     if (int.TryParse(lastTwoCharsTo, out int tempIntTo) == false)
                     {
-/*
-                        if (tempIntTo >= 1 && tempIntTo <= 99)
-                        {
-                            logger.ZLogTrace($"[checkHostNameSuffix] OK! ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} From側コネクター形状:{device.fromConnectorName}");
-                        }
-                        else
-                        {
-                            isError = true;
-                            logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} To側デバイス名:{device.toDeviceName} To側ホスト名:{device.toHostName}");
-                        }
-*/
                         isError = true;
                         logger.ZLogError($"接尾語エラー ケーブルID:{device.fromCableID} To側ホスト名:{device.toHostName} To側デバイス名:{device.toDeviceName}");
                     }
